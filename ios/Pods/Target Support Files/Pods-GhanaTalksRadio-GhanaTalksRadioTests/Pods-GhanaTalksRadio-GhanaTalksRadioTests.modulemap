@@ -1,0 +1,6 @@
+module Pods_GhanaTalksRadio_GhanaTalksRadioTests {
+  umbrella header "Pods-GhanaTalksRadio-GhanaTalksRadioTests-umbrella.h"
+
+  export *
+  module * { export * }
+}
