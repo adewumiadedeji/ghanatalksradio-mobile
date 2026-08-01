@@ -148,6 +148,12 @@ export async function logoutUser(token: string): Promise<void> {
   await postForm('logout', {}, token);
 }
 
+/** Permanently deletes the account server-side (wp_account + related rows).
+ * Irreversible - see userStore.deleteAccount() for the confirmation flow. */
+export async function deleteAccount(token: string): Promise<void> {
+  await postForm('delete_account', {}, token);
+}
+
 export async function fetchMe(token: string): Promise<AuthUser> {
   const data = await getWithToken('me', token);
   return data.user;

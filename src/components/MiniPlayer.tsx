@@ -77,7 +77,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 3,
     backgroundColor: COLORS.surfaceContainer,
-    paddingVertical: 8,
+    paddingVertical: 0,
+    marginBottom: 8
   },
   collapsedText: {
     color: COLORS.secondary,

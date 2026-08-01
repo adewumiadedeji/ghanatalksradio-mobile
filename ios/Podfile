@@ -51,5 +51,21 @@ target 'GhanaTalksRadio' do
     #     config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
     #   end
     # end
+
+    # Xcode 26's Clang (21) enables fmt's C++20 `consteval` codepath, which is
+    # broken there and fails FMT_STRING expansions with "call to consteval
+    # function ... is not a constant expression". fmt's own Apple-clang
+    # version gate (base.h) predates clang 21, so it doesn't catch this.
+    # Force FMT_USE_CONSTEVAL off unconditionally on Apple clang until an
+    # upstream fmt/RN bump fixes this. See fmtlib/fmt#4740.
+    fmt_base_h = File.join(installer.sandbox.pod_dir('fmt'), 'include/fmt/base.h')
+    if File.exist?(fmt_base_h)
+      contents = File.read(fmt_base_h)
+      patched = contents.sub(
+        /#elif defined\(__apple_build_version__\) && __apple_build_version__ < \d+L\n#  define FMT_USE_CONSTEVAL 0.*\n/,
+        "#elif defined(__apple_build_version__)\n#  define FMT_USE_CONSTEVAL 0  // consteval is broken in Apple clang (incl. Xcode 26 / clang 21).\n"
+      )
+      File.write(fmt_base_h, patched) if patched != contents
+    end
   end
 end

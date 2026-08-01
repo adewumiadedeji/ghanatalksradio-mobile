@@ -13,6 +13,7 @@ import { Article } from '../types';
 export default function ProfileScreen({ navigation }: any) {
   const user = useUserStore((s) => s.user);
   const logout = useUserStore((s) => s.logout);
+  const deleteAccount = useUserStore((s) => s.deleteAccount);
   const toggleBookmark = useUserStore((s) => s.toggleBookmark);
   const {
     data: bookmarkedArticles,
@@ -25,6 +26,7 @@ export default function ProfileScreen({ navigation }: any) {
   // Likes are a local, cosmetic-only counter (same as NewsScreen.tsx) - there's
   // no WordPress likes/comments endpoint to persist them to.
   const [localLikes, setLocalLikes] = useState<Record<string, number>>({});
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   if (!user) {
     return (
@@ -45,6 +47,33 @@ export default function ProfileScreen({ navigation }: any) {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Log Out', style: 'destructive', onPress: logout },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      'This permanently deletes your account, saved articles, and raffle history. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeletingAccount(true);
+            try {
+              await deleteAccount();
+            } catch (e) {
+              Alert.alert(
+                "Couldn't delete account",
+                e instanceof Error ? e.message : 'Please try again.'
+              );
+            } finally {
+              setIsDeletingAccount(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -91,6 +120,13 @@ export default function ProfileScreen({ navigation }: any) {
                 style={{ marginTop: SPACING.md }}
               />
               <SecondaryButton title="Log Out" onPress={handleLogout} style={{ marginTop: SPACING.sm }} />
+              <SecondaryButton
+                title="Delete My Account"
+                onPress={handleDeleteAccount}
+                loading={isDeletingAccount}
+                style={{ marginTop: SPACING.sm, borderColor: COLORS.error }}
+                textStyle={{ color: COLORS.error }}
+              />
             </View>
 
             <Text style={styles.sectionTitle}>Saved Articles</Text>

@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   ViewStyle,
+  TextStyle,
   TextInputProps,
 } from 'react-native';
 import { COLORS, RADIUS, SPACING } from '../theme/colors';
@@ -24,6 +25,7 @@ interface ButtonProps {
   disabled?: boolean;
   icon?: React.ReactNode;
   style?: ViewStyle;
+  textStyle?: TextStyle;
 }
 
 export function PrimaryButton({ title, onPress, loading, disabled, icon, style }: ButtonProps) {
@@ -50,7 +52,7 @@ export function PrimaryButton({ title, onPress, loading, disabled, icon, style }
   );
 }
 
-export function SecondaryButton({ title, onPress, loading, disabled, icon, style }: ButtonProps) {
+export function SecondaryButton({ title, onPress, loading, disabled, icon, style, textStyle }: ButtonProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -62,11 +64,11 @@ export function SecondaryButton({ title, onPress, loading, disabled, icon, style
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={COLORS.secondary} size="small" />
+        <ActivityIndicator color={textStyle?.color ?? COLORS.secondary} size="small" />
       ) : (
         <View style={styles.buttonContent}>
           {icon}
-          <Text style={styles.secondaryButtonText}>{title}</Text>
+          <Text style={[styles.secondaryButtonText, textStyle]}>{title}</Text>
         </View>
       )}
     </Pressable>

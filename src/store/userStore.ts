@@ -6,6 +6,7 @@ import {
   registerUser,
   loginUser,
   logoutUser,
+  deleteAccount as deleteAccountApi,
   fetchMe,
   resetPassword,
   confirmPasswordResetPin,
@@ -30,6 +31,11 @@ interface UserState {
    * via the existing session token rather than a reset ticket/PIN. */
   changePassword: (newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Permanently deletes the account server-side, then clears the local
+   * session. Unlike logout(), this does NOT fall back to clearing the
+   * local session on failure - if the server call fails, the account
+   * still exists, so the caller should see the error and can retry. */
+  deleteAccount: () => Promise<void>;
   /** Re-checks a persisted token against the server on cold start; clears
    * the session locally if it's no longer valid (expired/logged out
    * elsewhere). No-op if there's no persisted user. */
@@ -103,6 +109,13 @@ export const useUserStore = create<UserState>()(
             // whether the server call succeeded.
           }
         }
+        set({ user: null });
+      },
+
+      deleteAccount: async () => {
+        const user = get().user;
+        if (!user) throw new Error('You must be signed in to delete your account.');
+        await deleteAccountApi(user.token);
         set({ user: null });
       },
 
