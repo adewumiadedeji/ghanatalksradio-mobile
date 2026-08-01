@@ -18,6 +18,12 @@ import RaffleScreen from '../screens/RaffleScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import PodcastStackNavigator from './PodcastStackNavigator';
 import NowPlayingScreen from '../screens/NowPlayingScreen';
+import RafflePaymentScreen from '../screens/RafflePaymentScreen';
+import PasswordResetScreen from '../screens/PasswordResetScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ConfirmResetPinScreen from '../screens/ConfirmResetPinScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import YoutubeVideoScreen from '../screens/YoutubeVideoScreen';
 
 const AuthStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
@@ -66,6 +72,9 @@ function AuthNavigator({ route }: any) {
     <AuthStack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="SignUp" component={SignUpScreen} />
+      <AuthStack.Screen name="PasswordReset" component={PasswordResetScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <AuthStack.Screen name="ConfirmResetPin" component={ConfirmResetPinScreen} />
     </AuthStack.Navigator>
   );
 }
@@ -73,10 +82,14 @@ function AuthNavigator({ route }: any) {
 export default function RootNavigator() {
   const hasHydrated = useUserStore((s) => s.hasHydrated);
   const initReconnectWatcher = useRadioStore((s) => s.initReconnectWatcher);
+  const initAudioInterruptionWatcher = useRadioStore((s) => s.initAudioInterruptionWatcher);
+  const initPlaybackStateWatcher = useRadioStore((s) => s.initPlaybackStateWatcher);
 
   useEffect(() => {
     initReconnectWatcher();
-  }, [initReconnectWatcher]);
+    initAudioInterruptionWatcher();
+    initPlaybackStateWatcher();
+  }, [initReconnectWatcher, initAudioInterruptionWatcher, initPlaybackStateWatcher]);
 
   if (!hasHydrated) {
     return (
@@ -99,6 +112,21 @@ export default function RootNavigator() {
         <RootStack.Screen
           name="AuthModal"
           component={AuthNavigator}
+          options={{ presentation: 'modal' }}
+        />
+        <RootStack.Screen
+          name="RafflePayment"
+          component={RafflePaymentScreen}
+          options={{ presentation: 'modal' }}
+        />
+        <RootStack.Screen
+          name="ChangePassword"
+          component={ChangePasswordScreen}
+          options={{ presentation: 'modal' }}
+        />
+        <RootStack.Screen
+          name="YoutubeVideo"
+          component={YoutubeVideoScreen}
           options={{ presentation: 'modal' }}
         />
       </RootStack.Navigator>

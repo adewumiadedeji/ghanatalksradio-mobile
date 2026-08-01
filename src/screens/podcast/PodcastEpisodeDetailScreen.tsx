@@ -59,7 +59,7 @@ export default function PodcastEpisodeDetailScreen({ route, navigation }: any) {
     );
   }
 
-  const episode = data.episode;
+  const episode: any = data.episode;
   const timeRange = formatEpisodeTimeRange(episode.startDate, episode.endDate);
   // Show-level external links carry the real platform URLs on this backend;
   // episode-level external was empty on every confirmed sample.
@@ -69,7 +69,7 @@ export default function PodcastEpisodeDetailScreen({ route, navigation }: any) {
 
   const handlePlay = () => {
     if (!episode.audioUrl) return;
-    playPodcastEpisode({ id: episode.id, title: episode.title, url: episode.audioUrl });
+    playPodcastEpisode(episode);
     navigation.navigate('NowPlaying');
   };
 

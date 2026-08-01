@@ -1,5 +1,7 @@
 import { create } from 'zustand';
+import { State as NativePlaybackState } from 'react-native-track-player';
 import { PlaybackState } from '../types';
+import { PodcastEpisode, PodcastExternalLinks } from '../types/podcast';
 import {
   playLiveStream,
   pausePlayback,
@@ -7,13 +9,50 @@ import {
   stopPlayback,
   playEpisode as playEpisodeService,
   registerReconnectHandler,
+  registerAudioInterruptionHandler,
+  registerPlaybackStateHandler,
+  seekTo as seekToService,
+  seekBy as seekByService,
 } from '../services/radioService';
+
+// Maps TrackPlayer's real native state onto this app's simpler UI-facing
+// enum. Returns undefined for states with no meaningful UI distinction
+// (e.g. State.Ready, a brief transitional state between reset() and play())
+// so the watcher below leaves playbackState alone rather than flickering.
+function mapNativeState(state: NativePlaybackState): PlaybackState | undefined {
+  switch (state) {
+    case NativePlaybackState.Loading:
+    case NativePlaybackState.Buffering:
+      return 'loading';
+    case NativePlaybackState.Playing:
+      return 'playing';
+    case NativePlaybackState.Paused:
+      return 'paused';
+    case NativePlaybackState.Error:
+      return 'error';
+    case NativePlaybackState.Stopped:
+    case NativePlaybackState.None:
+    case NativePlaybackState.Ended:
+      return 'stopped';
+    default:
+      return undefined;
+  }
+}
 
 interface NowPlaying {
   id: string;
   title: string;
   subtitle: string;
   isLive: boolean;
+  // Podcast-only metadata, so NowPlayingScreen can show more than just a
+  // title - undefined for the live stream, which has none of this.
+  showName?: string;
+  showSlug?: string;
+  artworkUrl?: string | null;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  externalLinks?: PodcastExternalLinks;
 }
 
 interface RadioState {
@@ -21,25 +60,43 @@ interface RadioState {
   nowPlaying: NowPlaying | null;
   reconnectFailed: boolean;
   playLive: () => Promise<void>;
-  playPodcastEpisode: (episode: { id: string | number; title: string; url: string }) => Promise<void>;
+  playPodcastEpisode: (episode: PodcastEpisode) => Promise<void>;
   togglePlayPause: () => Promise<void>;
+  /** No-op unless currently playing. Used to duck the live stream for
+   * something else needing exclusive audio (e.g. a YouTube video screen). */
+  pause: () => Promise<void>;
+  /** No-op unless currently paused. Pairs with pause() above. */
+  resume: () => Promise<void>;
   stop: () => Promise<void>;
+  /** Seeking only makes sense for on-demand podcast playback, not the live
+   * broadcast - callers should gate these on !nowPlaying?.isLive. */
+  seekTo: (positionSeconds: number) => Promise<void>;
+  seekBy: (offsetSeconds: number) => Promise<void>;
   initReconnectWatcher: () => void;
+  initAudioInterruptionWatcher: () => void;
+  initPlaybackStateWatcher: () => void;
 }
 
 let reconnectWatcherStarted = false;
+let audioInterruptionWatcherStarted = false;
+let playbackStateWatcherStarted = false;
 
 export const useRadioStore = create<RadioState>((set, get) => ({
   playbackState: 'stopped',
   nowPlaying: null,
   reconnectFailed: false,
 
+  // playbackState intentionally isn't set to 'playing' here once the calls
+  // below resolve - resolving only means the play command was issued, not
+  // that audio is actually flowing. The real state (playing/buffering/error)
+  // comes from initPlaybackStateWatcher, which reflects what the native
+  // player is actually doing - otherwise a dead network leaves the mini-player
+  // stuck showing "playing" with no sound at all.
   playLive: async () => {
     set({ playbackState: 'loading', reconnectFailed: false });
     try {
       await playLiveStream();
       set({
-        playbackState: 'playing',
         nowPlaying: { id: 'live-stream', title: 'Live Broadcast', subtitle: 'GhanaTalksRadio', isLive: true },
       });
     } catch {
@@ -48,12 +105,24 @@ export const useRadioStore = create<RadioState>((set, get) => ({
   },
 
   playPodcastEpisode: async (episode) => {
+    if (!episode.audioUrl) return;
     set({ playbackState: 'loading', reconnectFailed: false });
     try {
-      await playEpisodeService(episode);
+      await playEpisodeService({ id: episode.id, title: episode.title, url: episode.audioUrl });
       set({
-        playbackState: 'playing',
-        nowPlaying: { id: `episode-${episode.id}`, title: episode.title, subtitle: 'Podcast', isLive: false },
+        nowPlaying: {
+          id: `episode-${episode.id}`,
+          title: episode.title,
+          subtitle: episode.show.name,
+          isLive: false,
+          showName: episode.show.name,
+          showSlug: episode.show.slug,
+          artworkUrl: episode.show.imageUrl,
+          description: episode.description,
+          startDate: episode.startDate,
+          endDate: episode.endDate,
+          externalLinks: episode.show.external,
+        },
       });
     } catch {
       set({ playbackState: 'error' });
@@ -65,15 +134,38 @@ export const useRadioStore = create<RadioState>((set, get) => ({
     if (playbackState === 'playing') {
       await pausePlayback();
       set({ playbackState: 'paused' });
-    } else if (playbackState === 'paused') {
+    } else if (playbackState === 'paused' || playbackState === 'error') {
+      // 'error' here is a non-live track (e.g. a podcast episode) that
+      // failed mid-stream - the track is still loaded, so retrying just
+      // means asking the native player to try playing it again.
+      set({ playbackState: 'loading' });
       await resumePlayback();
-      set({ playbackState: 'playing' });
     }
+  },
+
+  pause: async () => {
+    if (get().playbackState !== 'playing') return;
+    await pausePlayback();
+    set({ playbackState: 'paused' });
+  },
+
+  resume: async () => {
+    if (get().playbackState !== 'paused') return;
+    set({ playbackState: 'loading' });
+    await resumePlayback();
   },
 
   stop: async () => {
     await stopPlayback();
     set({ playbackState: 'stopped', nowPlaying: null });
+  },
+
+  seekTo: async (positionSeconds) => {
+    await seekToService(positionSeconds);
+  },
+
+  seekBy: async (offsetSeconds) => {
+    await seekByService(offsetSeconds);
   },
 
   // Wires the Firestick app's 5-attempt/3s auto-reconnect logic to this store
@@ -83,6 +175,33 @@ export const useRadioStore = create<RadioState>((set, get) => ({
     reconnectWatcherStarted = true;
     registerReconnectHandler(() => {
       set({ playbackState: 'error', reconnectFailed: true });
+    });
+  },
+
+  // Keeps the mini-player's play/pause UI in sync when Android auto-pauses
+  // playback for us (another app taking audio focus) - the native layer
+  // already stops the audio, this just reflects that state in the UI.
+  initAudioInterruptionWatcher: () => {
+    if (audioInterruptionWatcherStarted) return;
+    audioInterruptionWatcherStarted = true;
+    registerAudioInterruptionHandler((permanent) => {
+      if (get().playbackState !== 'playing') return;
+      set(permanent ? { playbackState: 'stopped', nowPlaying: null } : { playbackState: 'paused' });
+    });
+  },
+
+  // Single source of truth for playbackState: reflects what the native
+  // player is actually doing, instead of the optimistic guesses the play/
+  // resume actions used to make. This is what makes a dead/weak network
+  // correctly show "loading" (or eventually "error") instead of a stuck
+  // "playing" state with no audio.
+  initPlaybackStateWatcher: () => {
+    if (playbackStateWatcherStarted) return;
+    playbackStateWatcherStarted = true;
+    registerPlaybackStateHandler((nativeState) => {
+      const mapped = mapNativeState(nativeState);
+      if (!mapped) return;
+      set({ playbackState: mapped });
     });
   },
 }));

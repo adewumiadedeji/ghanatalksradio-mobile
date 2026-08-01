@@ -6,18 +6,24 @@ import {
   FlatList,
   Pressable,
   StyleSheet,
-  Modal,
   ScrollView,
   SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Badge } from '../components/UI';
-import { ShareBar } from '../components/ShareBar';
+import { ArticleDetailModal } from '../components/ArticleDetailModal';
+import { BannerAdSlot } from '../components/ads/BannerAdSlot';
 import { COLORS, SPACING, RADIUS } from '../theme/colors';
 import { useUserStore } from '../store/userStore';
 import { useNewsFeed, useCategories } from '../services/queries';
 import { Article } from '../types';
+import { useRefetchOnFocus } from '../hooks/useRefetchOnFocus';
+import { withAds } from '../utils/adFeed';
+
+// One banner ad inserted every 6 articles, matching the web version's
+// in-feed ad cadence.
+const AD_INTERVAL = 6;
 
 export default function NewsScreen({ navigation }: any) {
   const user = useUserStore((s) => s.user);
@@ -42,9 +48,15 @@ export default function NewsScreen({ navigation }: any) {
     isFetchingNextPage,
   } = useNewsFeed(selectedCategoryId);
 
+  // News sits in a bottom-tab navigator, so it stays mounted in the
+  // background when the user switches tabs - without this, the feed only
+  // ever refreshes on first mount or an explicit pull-to-refresh.
+  useRefetchOnFocus(refetch);
+
   const articles = data?.articles ?? [];
   const breaking = !selectedCategoryId ? articles.find((a) => a.isBreaking) : undefined;
   const listArticles = breaking ? articles.filter((a) => a.id !== breaking.id) : articles;
+  const feedItems = withAds(listArticles, AD_INTERVAL);
 
   const handleBookmark = (articleId: string) => {
     if (!user) {
@@ -81,8 +93,8 @@ export default function NewsScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.flex}>
       <FlatList
-        data={listArticles}
-        keyExtractor={(item) => item.id}
+        data={feedItems}
+        keyExtractor={(item) => (item.kind === 'item' ? item.item.id : item.key)}
         onRefresh={refetch}
         refreshing={isRefetching}
         onEndReachedThreshold={0.4}
@@ -164,33 +176,29 @@ export default function NewsScreen({ navigation }: any) {
             )}
           </View>
         }
-        renderItem={({ item }) => (
-          <ArticleCard
-            article={item}
-            isBookmarked={!!user?.bookmarkedArticleIds.includes(item.id)}
-            onPress={() => setActiveArticle(item)}
-            onBookmark={() => handleBookmark(item.id)}
-          />
-        )}
+        renderItem={({ item }) =>
+          item.kind === 'ad' ? (
+            <BannerAdSlot />
+          ) : (
+            <ArticleCard
+              article={item.item}
+              isBookmarked={!!user?.bookmarkedArticleIds.includes(item.item.id)}
+              onPress={() => setActiveArticle(item.item)}
+              onBookmark={() => handleBookmark(item.item.id)}
+            />
+          )
+        }
         contentContainerStyle={styles.listContent}
       />
 
-      <Modal
-        visible={!!activeArticle}
-        animationType="slide"
-        onRequestClose={() => setActiveArticle(null)}
-      >
-        {activeArticle && (
-          <ArticleDetail
-            article={activeArticle}
-            likeCount={activeArticle.likes + (localLikes[activeArticle.id] ?? 0)}
-            isBookmarked={!!user?.bookmarkedArticleIds.includes(activeArticle.id)}
-            onClose={() => setActiveArticle(null)}
-            onLike={() => handleLike(activeArticle.id)}
-            onBookmark={() => handleBookmark(activeArticle.id)}
-          />
-        )}
-      </Modal>
+      <ArticleDetailModal
+        article={activeArticle}
+        likeCount={activeArticle ? activeArticle.likes + (localLikes[activeArticle.id] ?? 0) : 0}
+        isBookmarked={!!activeArticle && !!user?.bookmarkedArticleIds.includes(activeArticle.id)}
+        onClose={() => setActiveArticle(null)}
+        onLike={() => activeArticle && handleLike(activeArticle.id)}
+        onBookmark={() => activeArticle && handleBookmark(activeArticle.id)}
+      />
     </SafeAreaView>
   );
 }
@@ -231,55 +239,6 @@ function ArticleCard({
         </View>
       </View>
     </Pressable>
-  );
-}
-
-function ArticleDetail({
-  article,
-  likeCount,
-  isBookmarked,
-  onClose,
-  onLike,
-  onBookmark,
-}: {
-  article: Article;
-  likeCount: number;
-  isBookmarked: boolean;
-  onClose: () => void;
-  onLike: () => void;
-  onBookmark: () => void;
-}) {
-  return (
-    <SafeAreaView style={styles.flex}>
-      <View style={styles.detailHeader}>
-        <Pressable onPress={onClose} hitSlop={10}>
-          <Ionicons name="close" size={26} color={COLORS.onSurface} />
-        </Pressable>
-        <View style={styles.detailHeaderActions}>
-          <Pressable onPress={onLike} hitSlop={10} style={styles.detailIconButton}>
-            <Ionicons name="heart-outline" size={22} color={COLORS.onSurface} />
-            <Text style={styles.detailIconLabel}>{likeCount}</Text>
-          </Pressable>
-          <Pressable onPress={onBookmark} hitSlop={10}>
-            <Ionicons
-              name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
-              size={22}
-              color={isBookmarked ? COLORS.secondary : COLORS.onSurface}
-            />
-          </Pressable>
-        </View>
-      </View>
-      <ScrollView contentContainerStyle={styles.detailContent}>
-        {article.isBreaking && <Badge text="Breaking" variant="breaking" />}
-        <Text style={styles.detailTitle}>{article.title}</Text>
-        <Text style={styles.detailMeta}>
-          By {article.author} · {article.date} · {article.readTime}
-        </Text>
-        <Image source={{ uri: article.image }} style={styles.detailImage} />
-        <Text style={styles.detailBody}>{article.content}</Text>
-        <ShareBar url={article.link} title={article.title} />
-      </ScrollView>
-    </SafeAreaView>
   );
 }
 
@@ -356,19 +315,4 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   cardMeta: { fontSize: 12, color: COLORS.outline },
-  detailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-  },
-  detailHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  detailIconButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  detailIconLabel: { fontSize: 13, color: COLORS.onSurface },
-  detailContent: { padding: SPACING.md, gap: SPACING.md },
-  detailTitle: { fontSize: 26, fontWeight: '700', color: COLORS.onSurface, lineHeight: 32 },
-  detailMeta: { fontSize: 13, color: COLORS.onSurfaceVariant },
-  detailImage: { width: '100%', height: 220, borderRadius: RADIUS.lg },
-  detailBody: { fontSize: 16, lineHeight: 26, color: COLORS.onSurface, textAlign: 'justify' },
 });

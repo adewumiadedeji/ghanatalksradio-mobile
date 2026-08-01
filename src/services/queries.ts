@@ -5,11 +5,9 @@ import {
   fetchPostsByIds,
   fetchCategories,
   searchPosts,
-  fetchVideoSourcePosts,
   mapWPPostToArticle,
-  mapWPPostToVideoPost,
 } from './api';
-import { Article, VideoPost } from '../types';
+import { Article } from '../types';
 
 const PER_PAGE = 10;
 
@@ -67,17 +65,5 @@ export function useBookmarkedArticles(articleIds: string[]) {
   });
 }
 
-// "Watch" section - video posts sourced from the music-video-mix/music/entertainment
-// categories, filtered to those that actually contain a YouTube embed.
-export function useVideoPosts() {
-  return useQuery({
-    queryKey: ['videoPosts'],
-    queryFn: async (): Promise<VideoPost[]> => {
-      const posts = await fetchVideoSourcePosts(20);
-      return posts
-        .map(mapWPPostToVideoPost)
-        .filter((v): v is VideoPost => v !== null);
-    },
-    staleTime: 1000 * 60 * 10,
-  });
-}
+// "Watch" section now sourced from the YouTube channel directly - see
+// services/youtubeQueries.ts's useYoutubeVideos().

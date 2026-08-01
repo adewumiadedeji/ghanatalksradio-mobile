@@ -31,7 +31,7 @@ export function PodcastEpisodeCard({ episode }: PodcastEpisodeCardProps) {
 
   const handlePlay = () => {
     if (!episode.audioUrl) return;
-    playPodcastEpisode({ id: episode.id, title: episode.title, url: episode.audioUrl });
+    playPodcastEpisode(episode);
     navigation.navigate('NowPlaying');
   };
 

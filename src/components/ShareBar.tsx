@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Linking } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Linking, Alert } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS, SPACING, RADIUS } from '../theme/colors';
 import { CHANNEL_LINKS } from '../data/channelLinks';
@@ -25,15 +25,24 @@ export function ShareBar({ url, title }: ShareBarProps) {
   const [copied, setCopied] = useState(false);
 
   const openShare = (shareUrl: string) => {
-    Linking.openURL(shareUrl).catch(() => {});
+    Linking.openURL(shareUrl).catch(() => {
+      Alert.alert('Could not open link', 'Please check your internet connection and try again.');
+    });
   };
 
   const handleInstagramPress = async () => {
     const ok = await copyLinkToClipboard(url);
-    if (ok) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    if (!ok) {
+      Alert.alert('Could not copy link', 'Please try again.');
+      return;
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    // Instagram has no share-intent for plain links, so the best we can do is
+    // copy the link and hand off to the app so the user can paste it in a
+    // bio/DM/story. openURL (unlike canOpenURL) silently no-ops if Instagram
+    // isn't installed, so no availability check is needed here.
+    Linking.openURL('instagram://app').catch(() => {});
   };
 
   return (

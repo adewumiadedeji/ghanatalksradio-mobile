@@ -18,11 +18,12 @@ export default function SignUpScreen({ navigation }: any) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!fullName || !email || !password) {
       setErrorMessage('Please fill in all fields.');
       return;
@@ -33,11 +34,14 @@ export default function SignUpScreen({ navigation }: any) {
     }
     setErrorMessage('');
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      signUp(email, fullName);
+    try {
+      await signUp(fullName, email, password, phone || undefined);
       navigation.getParent()?.goBack();
-    }, 1200);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : 'Sign up failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -83,6 +87,13 @@ export default function SignUpScreen({ navigation }: any) {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+          />
+          <InputGroup
+            label="Phone Number (optional)"
+            placeholder="024 123 4567"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
           />
 
           <Pressable style={styles.checkboxRow} onPress={() => setAgreeTerms((v) => !v)}>

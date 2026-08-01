@@ -17,6 +17,12 @@ import { PodcastEpisode } from '../../types/podcast';
 import { PodcastEpisodeCard } from '../../components/PodcastEpisodeCard';
 import { Pagination } from '../../components/Pagination';
 import { getAvailablePlatformLinks } from '../../utils/podcastPlatforms';
+import { BannerAdSlot } from '../../components/ads/BannerAdSlot';
+import { withAds } from '../../utils/adFeed';
+
+// One banner ad every 4 episodes (10 episodes/page), matching the
+// in-feed ad cadence used for the News list.
+const AD_INTERVAL = 4;
 
 /**
  * Show archive screen (PodcastShow route param: showSlug) - every episode
@@ -34,6 +40,7 @@ export default function PodcastShowScreen({ route, navigation }: any) {
   const episodes = data?.episodes ?? [];
   const knownTotalPages = data?.hasMore ? page + 1 : page;
   const platformLinks = show ? getAvailablePlatformLinks(show.external as any) : [];
+  const feedItems = withAds<PodcastEpisode>(episodes, AD_INTERVAL);
 
   if (isLoading && !data) {
     return (
@@ -64,8 +71,8 @@ export default function PodcastShowScreen({ route, navigation }: any) {
   return (
     <SafeAreaView style={styles.flex}>
       <FlatList
-        data={episodes}
-        keyExtractor={(item) => item.id}
+        data={feedItems}
+        keyExtractor={(item) => (item.kind === 'item' ? item.item.id : item.key)}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View>
@@ -120,9 +127,9 @@ export default function PodcastShowScreen({ route, navigation }: any) {
             </View>
           ) : null
         }
-        renderItem={({ item }: { item: PodcastEpisode }) => (
+        renderItem={({ item }) => (
           <View style={{ marginHorizontal: SPACING.md, marginBottom: SPACING.sm }}>
-            <PodcastEpisodeCard episode={item} />
+            {item.kind === 'ad' ? <BannerAdSlot /> : <PodcastEpisodeCard episode={item.item} />}
           </View>
         )}
       />

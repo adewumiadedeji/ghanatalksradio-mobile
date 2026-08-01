@@ -28,6 +28,8 @@ export const COLORS = {
   tertiaryContainer: '#40000d',
   onTertiaryContainer: '#f23d5c',
   error: '#ba1a1a',
+  success: '#1b8a3d',
+  onSuccess: '#ffffff',
 };
 
 // Stitch design used 'Newsreader' (serif, headings) and 'Work Sans' (sans, body).

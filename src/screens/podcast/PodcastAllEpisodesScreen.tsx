@@ -2,10 +2,16 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, FlatList, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS, SPACING, RADIUS } from '../../theme/colors';
-import { usePodcastEpisodesPage } from '../../services/podcastQueries';
+import { usePodcastEpisodes } from '../../services/podcastQueries';
 import { PodcastEpisode } from '../../types/podcast';
 import { PodcastEpisodeCard } from '../../components/PodcastEpisodeCard';
 import { Pagination } from '../../components/Pagination';
+import { BannerAdSlot } from '../../components/ads/BannerAdSlot';
+import { withAds } from '../../utils/adFeed';
+
+// One banner ad every 4 episodes (10 episodes/page), matching the
+// in-feed ad cadence used for the News list.
+const AD_INTERVAL = 4;
 
 /**
  * Flat global episode feed across every show, matching the web version's
@@ -15,16 +21,17 @@ import { Pagination } from '../../components/Pagination';
  */
 export default function PodcastAllEpisodesScreen({ navigation }: any) {
   const [page, setPage] = useState(1);
-  const { data, isLoading, isError, error, refetch } = usePodcastEpisodesPage(page);
+  const { data, isLoading, isError, error, refetch } = usePodcastEpisodes(page);
 
   const episodes = data?.episodes ?? [];
   const knownTotalPages = data?.hasMore ? page + 1 : page;
+  const feedItems = withAds<PodcastEpisode>(episodes, AD_INTERVAL);
 
   return (
     <SafeAreaView style={styles.flex}>
       <FlatList
-        data={episodes}
-        keyExtractor={(item) => item.id}
+        data={feedItems}
+        keyExtractor={(item) => (item.kind === 'item' ? item.item.id : item.key)}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View>
@@ -66,9 +73,9 @@ export default function PodcastAllEpisodesScreen({ navigation }: any) {
             </View>
           ) : null
         }
-        renderItem={({ item }: { item: PodcastEpisode }) => (
+        renderItem={({ item }) => (
           <View style={{ marginHorizontal: SPACING.md, marginBottom: SPACING.sm }}>
-            <PodcastEpisodeCard episode={item} />
+            {item.kind === 'ad' ? <BannerAdSlot /> : <PodcastEpisodeCard episode={item.item} />}
           </View>
         )}
       />

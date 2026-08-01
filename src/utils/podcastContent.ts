@@ -81,15 +81,16 @@ export function parseExternalLinks(raw: RawExternalLinksJson): PodcastExternalLi
  * (id 3638) where this field contains a full news bulletin transcript
  * instead of a URL — playing that as audio would silently fail or, worse,
  * attempt to "play" arbitrary text as a media source.
+ *
+ * Deliberately avoids the global `URL` object: React Native's built-in
+ * polyfill (Libraries/Blob/URL.js) throws on `.protocol` access
+ * ("not implemented"), which was silently caught here and made every
+ * audioUrl resolve to null on-device even though the same check works
+ * fine in a browser.
  */
 export function isPlayableAudioUrl(value: string): boolean {
   if (!value) return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
+  return /^https?:\/\//i.test(value.trim());
 }
 
 /** Resolves a bare image filename from the podcast API into a full URL. Returns null if there's no filename to resolve. */

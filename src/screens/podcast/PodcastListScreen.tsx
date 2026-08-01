@@ -8,15 +8,11 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS, SPACING, RADIUS } from '../../theme/colors';
 import { useRadioStore } from '../../store/radioStore';
-import { getYouTubeWatchUrl } from '../../services/api';
-import { useVideoPosts } from '../../services/queries';
 import { usePodcastShowList } from '../../services/podcastQueries';
-import { VideoPost } from '../../types';
 import { PodcastShow } from '../../types/podcast';
 
 /**
@@ -37,7 +33,6 @@ interface ResolvedNavChild {
 
 export default function PodcastListScreen({ navigation }: any) {
   const { playbackState, nowPlaying, playLive } = useRadioStore();
-  const { data: videos = [], isLoading: videosLoading } = useVideoPosts();
   const {
     data: shows,
     isLoading: showsLoading,
@@ -49,12 +44,6 @@ export default function PodcastListScreen({ navigation }: any) {
   
 
   const isLiveActive = nowPlaying?.isLive && playbackState !== 'stopped';
-
-  const openVideo = (video: VideoPost) => {
-    Linking.openURL(getYouTubeWatchUrl(video.videoId)).catch(() => {});
-  };
-
-  console.log("PODCASTS: ", shows)
 
   return (
     <SafeAreaView style={styles.flex}>
@@ -97,36 +86,6 @@ export default function PodcastListScreen({ navigation }: any) {
                 />
               )}
             </Pressable>
-
-            <Text style={styles.sectionTitle}>Watch</Text>
-            {videosLoading ? (
-              <ActivityIndicator style={{ marginLeft: SPACING.md }} color={COLORS.secondary} />
-            ) : videos.length === 0 ? (
-              <Text style={[styles.emptyText, { marginHorizontal: SPACING.md }]}>
-                No videos available right now.
-              </Text>
-            ) : (
-              <FlatList
-                horizontal
-                data={videos}
-                keyExtractor={(item) => item.id}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.videoRow}
-                renderItem={({ item }) => (
-                  <Pressable style={styles.videoCard} onPress={() => openVideo(item)}>
-                    <View>
-                      <Image source={{ uri: item.thumbnail }} style={styles.videoThumb} />
-                      <View style={styles.playOverlay}>
-                        <Ionicons name="play-circle" size={36} color="#fff" />
-                      </View>
-                    </View>
-                    <Text style={styles.videoTitle} numberOfLines={2}>
-                      {item.title}
-                    </Text>
-                  </Pressable>
-                )}
-              />
-            )}
 
             <Text style={styles.sectionTitle}>Categories</Text>
 
@@ -220,15 +179,6 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     marginBottom: SPACING.sm,
   },
-  videoRow: { paddingHorizontal: SPACING.md, gap: SPACING.sm },
-  videoCard: { width: 160 },
-  videoThumb: { width: 160, height: 96, borderRadius: RADIUS.md, backgroundColor: COLORS.surfaceContainer },
-  playOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  videoTitle: { fontSize: 12, fontWeight: '600', color: COLORS.onSurface, marginTop: 6 },
   allPodcastTile: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -4,33 +4,76 @@ import {
   Text,
   TextInput,
   FlatList,
+  Image,
   Pressable,
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
+  Linking,
+  Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS, SPACING, RADIUS } from '../theme/colors';
-import { useContentStore } from '../store/contentStore';
 import { useUserStore } from '../store/userStore';
 import { useSearchArticles } from '../services/queries';
+import { usePollList, useVoteMutation } from '../services/pollsQueries';
+import { PollDto, PollOptionDto } from '../services/pollsApi';
+import { useYoutubeVideos } from '../services/youtubeQueries';
+import { YoutubeVideoDto } from '../services/youtubeApi';
+import { useRefetchOnFocus } from '../hooks/useRefetchOnFocus';
+import { BannerAdSlot } from '../components/ads/BannerAdSlot';
 
-export default function DiscoverScreen() {
-  const polls = useContentStore((s) => s.polls);
-  const votePoll = useContentStore((s) => s.votePoll);
-  const addPoints = useUserStore((s) => s.addPoints);
+const FACEBOOK_URL = 'https://www.facebook.com/GhanaTalksRadio/';
+const INSTAGRAM_URL = 'https://www.instagram.com/ghanatalksradio/';
 
+export default function DiscoverScreen({ navigation }: any) {
+  const user = useUserStore((s) => s.user);
   const [searchQuery, setSearchQuery] = useState('');
   const { data: results, isLoading, isError } = useSearchArticles(searchQuery);
 
-  const handleVote = (pollId: string, optionIndex: number, rewardPoints: number) => {
-    const poll = polls.find((p) => p.id === pollId);
-    if (poll?.userVoteIndex !== undefined) return;
-    votePoll(pollId, optionIndex);
-    addPoints(rewardPoints);
-  };
+  const { data: polls, isLoading: pollsLoading, refetch: refetchPolls } = usePollList(user?.token ?? null);
+  const voteMutation = useVoteMutation();
+
+  const {
+    data: videoPages,
+    isLoading: videosLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch: refetchVideos,
+  } = useYoutubeVideos();
+
+  // Discover sits in a bottom-tab navigator, so it stays mounted in the
+  // background when the user switches tabs - without this, polls/videos
+  // only ever refresh on the very first mount, not on returning to the tab.
+  useRefetchOnFocus(refetchPolls, refetchVideos);
+
+  const liveVideos = videoPages?.pages[0]?.live ?? [];
+  const liveIds = new Set(liveVideos.map((v) => v.videoId));
+  const recentVideos = (videoPages?.pages.flatMap((p) => p.videos) ?? []).filter(
+    (v) => !liveIds.has(v.videoId)
+  );
+  const allVideos: (YoutubeVideoDto & { isLive: boolean })[] = [
+    ...liveVideos.map((v) => ({ ...v, isLive: true })),
+    ...recentVideos.map((v) => ({ ...v, isLive: false })),
+  ];
 
   const isSearching = searchQuery.trim().length > 1;
+
+  const openVideo = (video: YoutubeVideoDto) => {
+    navigation.navigate('YoutubeVideo', { videoId: video.videoId, title: video.title });
+  };
+
+  const handleVote = (pollId: number, optionId: number) => {
+    if (!user) {
+      Alert.alert('Sign in to vote', 'Create a free account or sign in to vote on this poll.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign In', onPress: () => navigation.navigate('AuthModal', { screen: 'Login' }) },
+      ]);
+      return;
+    }
+    voteMutation.mutate({ token: user.token, pollId, optionId });
+  };
 
   return (
     <SafeAreaView style={styles.flex}>
@@ -62,33 +105,124 @@ export default function DiscoverScreen() {
               <Text style={styles.emptyText}>No results for "{searchQuery}"</Text>
             )
           ) : (
-            <View style={{ gap: SPACING.md }}>
-              <Text style={styles.sectionTitle}>Daily Poll</Text>
-              {polls.map((poll) => (
-                <View key={poll.id} style={styles.pollCard}>
-                  <Text style={styles.pollQuestion}>{poll.question}</Text>
-                  {poll.options.map((option, idx) => {
-                    const totalVotes = poll.options.reduce((sum, o) => sum + o.votes, 0);
-                    const pct = totalVotes ? Math.round((option.votes / totalVotes) * 100) : 0;
-                    const voted = poll.userVoteIndex !== undefined;
+            <View style={{ gap: SPACING.lg }}>
+              {/* --- Polls --- */}
+              <View style={{ gap: SPACING.md }}>
+                <Text style={styles.sectionTitle}>Polls</Text>
+                {pollsLoading ? (
+                  <ActivityIndicator color={COLORS.secondary} />
+                ) : !polls || polls.length === 0 ? (
+                  <Text style={styles.emptyText}>No polls right now — check back soon.</Text>
+                ) : (
+                  polls.map((poll: PollDto) => {
+                    const totalVotes = poll.options.reduce((sum: number, o: PollOptionDto) => sum + o.votes, 0);
+                    const voted = poll.your_option_id !== null;
                     return (
-                      <Pressable
-                        key={idx}
-                        style={styles.pollOption}
-                        onPress={() => handleVote(poll.id, idx, poll.rewardPoints)}
-                        disabled={voted}
-                      >
-                        {voted && <View style={[styles.pollFill, { width: `${pct}%` }]} />}
-                        <Text style={styles.pollOptionText}>{option.text}</Text>
-                        {voted && <Text style={styles.pollPct}>{pct}%</Text>}
-                      </Pressable>
+                      <View key={poll.id} style={styles.pollCard}>
+                        <Text style={styles.pollQuestion}>{poll.question}</Text>
+                        {poll.options.map((option: PollOptionDto) => {
+                          const pct = totalVotes ? Math.round((option.votes / totalVotes) * 100) : 0;
+                          return (
+                            <Pressable
+                              key={option.id}
+                              style={styles.pollOption}
+                              onPress={() => handleVote(poll.id, option.id)}
+                              disabled={voted}
+                            >
+                              {voted && <View style={[styles.pollFill, { width: `${pct}%` }]} />}
+                              <Text style={styles.pollOptionText}>{option.text}</Text>
+                              {voted && <Text style={styles.pollPct}>{pct}%</Text>}
+                            </Pressable>
+                          );
+                        })}
+                        {!voted && (
+                          <Text style={styles.pollReward}>Vote to earn +{poll.reward_points} points</Text>
+                        )}
+                      </View>
                     );
-                  })}
-                  {poll.userVoteIndex === undefined && (
-                    <Text style={styles.pollReward}>Vote to earn +{poll.rewardPoints} points</Text>
-                  )}
-                </View>
-              ))}
+                  })
+                )}
+              </View>
+
+              <BannerAdSlot />
+
+              {/* --- YouTube --- */}
+              <View style={{ gap: SPACING.sm }}>
+                <Text style={styles.sectionTitle}>YouTube</Text>
+                {videosLoading ? (
+                  <ActivityIndicator color={COLORS.secondary} />
+                ) : allVideos.length === 0 ? (
+                  <Text style={styles.emptyText}>No videos available right now.</Text>
+                ) : (
+                  <FlatList
+                    horizontal
+                    data={allVideos}
+                    keyExtractor={(item) => item.videoId}
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.videoRow}
+                    onEndReached={() => {
+                      if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+                    }}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={
+                      isFetchingNextPage ? (
+                        <ActivityIndicator color={COLORS.secondary} style={{ marginHorizontal: SPACING.md }} />
+                      ) : null
+                    }
+                    renderItem={({ item }) => (
+                      <Pressable style={styles.videoCard} onPress={() => openVideo(item)}>
+                        <View>
+                          <Image source={{ uri: item.thumbnail }} style={styles.videoThumb} />
+                          {item.isLive && (
+                            <View style={styles.liveBadge}>
+                              <Text style={styles.liveBadgeText}>LIVE</Text>
+                            </View>
+                          )}
+                          <View style={styles.playOverlay}>
+                            <Ionicons name="play-circle" size={36} color="#fff" />
+                          </View>
+                        </View>
+                        <Text style={styles.videoTitle} numberOfLines={2}>
+                          {item.title}
+                        </Text>
+                      </Pressable>
+                    )}
+                  />
+                )}
+              </View>
+
+              {/* --- Facebook --- */}
+              <SocialSection
+                icon="logo-facebook"
+                title="Facebook"
+                message="Follow us on Facebook for more updates."
+                actionLabel="Follow us on Facebook"
+                onPress={() =>
+                  Linking.openURL(FACEBOOK_URL).catch(() =>
+                    Alert.alert('Could not open link', 'Please check your internet connection and try again.')
+                  )
+                }
+              />
+
+              {/* --- TikTok --- */}
+              <SocialSection
+                icon="logo-tiktok"
+                title="TikTok"
+                message="Our TikTok content is coming soon."
+              />
+
+              {/* --- Instagram --- */}
+              <SocialSection
+                icon="logo-instagram"
+                title="Instagram"
+                message="Follow us on Instagram for more updates."
+                actionLabel="Follow us on Instagram"
+                onPress={() =>
+                  Linking.openURL(INSTAGRAM_URL).catch(() =>
+                    Alert.alert('Could not open link', 'Please check your internet connection and try again.')
+                  )
+                }
+              />
             </View>
           )
         }
@@ -100,6 +234,35 @@ export default function DiscoverScreen() {
         )}
       />
     </SafeAreaView>
+  );
+}
+
+function SocialSection({
+  icon,
+  title,
+  message,
+  actionLabel,
+  onPress,
+}: {
+  icon: string;
+  title: string;
+  message: string;
+  actionLabel?: string;
+  onPress?: () => void;
+}) {
+  return (
+    <View style={{ gap: SPACING.sm }}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.socialCard}>
+        <Ionicons name={icon as any} size={28} color={COLORS.secondary} />
+        <Text style={styles.socialMessage}>{message}</Text>
+        {actionLabel && onPress && (
+          <Pressable style={styles.socialButton} onPress={onPress}>
+            <Text style={styles.socialButtonText}>{actionLabel}</Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -149,6 +312,43 @@ const styles = StyleSheet.create({
   pollOptionText: { fontSize: 14, color: COLORS.onSurface, fontWeight: '500' },
   pollPct: { fontSize: 13, color: COLORS.onSurfaceVariant, fontWeight: '600' },
   pollReward: { fontSize: 12, color: COLORS.secondary, fontWeight: '600' },
+  videoRow: { gap: SPACING.sm },
+  videoCard: { width: 160 },
+  videoThumb: { width: 160, height: 96, borderRadius: RADIUS.md, backgroundColor: COLORS.surfaceContainer },
+  liveBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: COLORS.error,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.pill,
+  },
+  liveBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoTitle: { fontSize: 12, fontWeight: '600', color: COLORS.onSurface, marginTop: 6 },
+  socialCard: {
+    backgroundColor: COLORS.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    alignItems: 'center',
+    gap: 8,
+  },
+  socialMessage: { fontSize: 13, color: COLORS.onSurfaceVariant, textAlign: 'center' },
+  socialButton: {
+    backgroundColor: COLORS.secondary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: RADIUS.pill,
+    marginTop: 4,
+  },
+  socialButtonText: { color: COLORS.onSecondary, fontWeight: '700', fontSize: 13 },
   resultCard: {
     backgroundColor: COLORS.surfaceContainerLowest,
     borderRadius: RADIUS.md,
@@ -158,5 +358,5 @@ const styles = StyleSheet.create({
   },
   resultCategory: { fontSize: 11, fontWeight: '700', color: COLORS.secondary, marginBottom: 4 },
   resultTitle: { fontSize: 15, fontWeight: '600', color: COLORS.onSurface },
-  emptyText: { textAlign: 'center', color: COLORS.onSurfaceVariant, marginTop: SPACING.xl },
+  emptyText: { textAlign: 'center', color: COLORS.onSurfaceVariant, marginTop: SPACING.md },
 });

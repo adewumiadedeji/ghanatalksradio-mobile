@@ -1,4 +1,4 @@
-import { Article, VideoPost } from '../types';
+import { Article } from '../types';
 
 const WP_API_BASE = 'https://wordpress.ghanatalksradio.com/wp-json/wp/v2';
 export const LIVE_STREAM_URL = 'https://live.ghanatalksradio.com/listen';
@@ -141,7 +141,10 @@ export function mapWPPostToArticle(post: WPPost): Article {
     authorImage: author?.avatar_urls?.['96'] ?? 'https://i.pravatar.cc/150?img=12',
     readTime: estimateReadTime(plainContent),
     excerpt: plainExcerpt,
-    content: plainContent,
+    // Raw HTML, not stripped - the detail screen renders this with RenderHtml
+    // so embedded YouTube iframes and formatting survive; stripHtml() above
+    // is still used for the plain-text title/excerpt/read-time estimate.
+    content: post.content.rendered,
     image: featuredMedia?.source_url ?? FALLBACK_IMAGE,
     isBreaking: !!post.sticky,
     date: formatPostDate(post.date),
@@ -151,74 +154,9 @@ export function mapWPPostToArticle(post: WPPost): Article {
   };
 }
 
-// --- Watch / video content ---
-// Confirmed in the web-rebuild session: there's no real "podcast" post type
-// or category on this WordPress backend - "GTR Podcast" in the old nav was
-// just branding text. The actual watchable video content (music videos,
-// entertainment clips) lives as ordinary posts in these three categories,
-// with a YouTube embed sitting in content.rendered. Not every post in these
-// categories has an embed (some are plain-text entertainment news), so
-// hasYouTubeEmbed() is the real filter - the category list is just a broad
-// net. This is distinct from the audio podcast catchup API below.
-
-export const VIDEO_CATEGORY_SLUGS = ['music-video-mix', 'music', 'entertainment'] as const;
-
-const YOUTUBE_PATTERN = /(?:youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/;
-
-export function getYouTubeVideoId(html: string): string | null {
-  const match = html.match(YOUTUBE_PATTERN);
-  return match ? match[1] : null;
-}
-
-export function hasYouTubeEmbed(post: WPPost): boolean {
-  return getYouTubeVideoId(post.content.rendered) !== null;
-}
-
-export function getYouTubeThumbnail(videoId: string): string {
-  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-}
-
-export function getYouTubeWatchUrl(videoId: string): string {
-  return `https://www.youtube.com/watch?v=${videoId}`;
-}
-
-export function mapWPPostToVideoPost(post: WPPost): VideoPost | null {
-  const videoId = getYouTubeVideoId(post.content.rendered);
-  if (!videoId) return null;
-  const categoryTerm = post._embedded?.['wp:term']
-    ?.flat()
-    .find((term) => term.taxonomy === 'category');
-
-  return {
-    id: String(post.id),
-    title: stripHtml(post.title.rendered),
-    videoId,
-    thumbnail: getYouTubeThumbnail(videoId),
-    category: categoryTerm?.name ?? 'Entertainment',
-    date: formatPostDate(post.date),
-  };
-}
-
-/**
- * Resolves the known video category slugs to IDs and fetches recent posts
- * from them. Returns more posts than requested internally since not every
- * post in these categories has an embed - callers should filter with
- * hasYouTubeEmbed() and slice to the count they actually want, same as
- * the web rebuild's getVideoSourcePosts().
- *
- * Degrades to an empty result (not a thrown error) if none of the category
- * slugs resolve, so a "Watch" section built on these doesn't surface an
- * error state to readers if the categories are renamed.
- */
-export async function fetchVideoSourcePosts(perPage = 20): Promise<WPPost[]> {
-  const categories = await Promise.all(VIDEO_CATEGORY_SLUGS.map(fetchCategoryBySlug));
-  const categoryIds = categories.filter((c): c is WPCategory => !!c).map((c) => c.id);
-
-  if (categoryIds.length === 0) return [];
-
-  const { posts } = await fetchPostsByCategory(categoryIds, 1, perPage);
-  return posts;
-}
+// Video content ("Watch" section on Discover) now comes from the station's
+// YouTube channel directly via services/youtubeApi.ts, not from WordPress
+// posts - see DiscoverScreen.tsx.
 
 // Podcast/catchup fetching now lives in services/podcastApi.ts (show-based
 // architecture matching the web rebuild) - not duplicated here.

@@ -12,6 +12,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Card, PrimaryButton, InputGroup } from '../components/UI';
 import { COLORS, SPACING } from '../theme/colors';
 import { useUserStore } from '../store/userStore';
+import { PasswordResetRequiredError } from '../services/authApi';
 
 export default function LoginScreen({ navigation }: any) {
   const login = useUserStore((s) => s.login);
@@ -21,20 +22,27 @@ export default function LoginScreen({ navigation }: any) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!email || !password) {
       setErrorMessage('Please fill in all fields.');
       return;
     }
     setErrorMessage('');
     setIsLoading(true);
-    // Mock auth, matches web prototype's setTimeout-based flow.
-    // Swap for a real auth call (e.g. WordPress JWT or a custom endpoint) when ready.
-    setTimeout(() => {
-      setIsLoading(false);
-      login(email, '');
+    try {
+      await login(email, password);
       navigation.getParent()?.goBack();
-    }, 1200);
+    } catch (e) {
+      if (e instanceof PasswordResetRequiredError) {
+        // Account proved it knows the current (legacy) password - route
+        // straight to setting a new one rather than showing an error.
+        navigation.navigate('PasswordReset', { resetTicket: e.resetTicket });
+        return;
+      }
+      setErrorMessage(e instanceof Error ? e.message : 'Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -97,6 +105,10 @@ export default function LoginScreen({ navigation }: any) {
               />
             </Pressable>
           </View>
+
+          <Pressable onPress={() => navigation.navigate('ForgotPassword')} hitSlop={6}>
+            <Text style={styles.forgotLink}>Forgot password?</Text>
+          </Pressable>
 
           <PrimaryButton
             title="Sign In"
@@ -161,6 +173,13 @@ const styles = StyleSheet.create({
   },
   errorText: { color: COLORS.error, fontSize: 13, fontWeight: '600' },
   eyeButton: { position: 'absolute', right: 16, top: 38 },
+  forgotLink: {
+    color: COLORS.secondary,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'right',
+    marginTop: 4,
+  },
   footer: { alignItems: 'center', gap: SPACING.md },
   footerText: { color: COLORS.onSurfaceVariant, fontSize: 15, textAlign: 'center' },
   link: { color: COLORS.secondary, fontWeight: '600' },

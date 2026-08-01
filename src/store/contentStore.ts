@@ -1,40 +1,16 @@
 import { create } from 'zustand';
-import { Raffle, Poll } from '../types';
-import { MOCK_RAFFLES, MOCK_POLLS, RECENT_WINNERS } from '../data/mockData';
+import { RECENT_WINNERS } from '../data/mockData';
 
 // Articles are no longer stored here - News/Discover/Profile read live from
-// WordPress via src/services/queries.ts. Raffles and polls have no WordPress
-// equivalent, so they remain local mock state pending a real backend.
+// WordPress via src/services/queries.ts. Raffles read live from the
+// CodeIgniter backend via src/services/raffleQueries.ts (see RaffleScreen).
+// Polls now read live from the backend too via src/services/pollsQueries.ts
+// (see DiscoverScreen). Recent winners have no backend equivalent yet, so
+// they remain local mock state.
 interface ContentState {
-  raffles: Raffle[];
-  polls: Poll[];
   recentWinners: string[];
-  votePoll: (pollId: string, optionIndex: number) => void;
-  enterRaffle: (raffleId: string, tickets: number) => void;
 }
 
-export const useContentStore = create<ContentState>((set, get) => ({
-  raffles: MOCK_RAFFLES,
-  polls: MOCK_POLLS,
+export const useContentStore = create<ContentState>(() => ({
   recentWinners: RECENT_WINNERS,
-
-  votePoll: (pollId, optionIndex) => {
-    set({
-      polls: get().polls.map((p) => {
-        if (p.id !== pollId || p.userVoteIndex !== undefined) return p;
-        const options = p.options.map((o, i) =>
-          i === optionIndex ? { ...o, votes: o.votes + 1 } : o
-        );
-        return { ...p, options, userVoteIndex: optionIndex };
-      }),
-    });
-  },
-
-  enterRaffle: (raffleId, tickets) => {
-    set({
-      raffles: get().raffles.map((r) =>
-        r.id === raffleId ? { ...r, totalEntered: r.totalEntered + tickets } : r
-      ),
-    });
-  },
 }));

@@ -4,14 +4,13 @@ import {
   getPodcastEpisodeBySlug,
   getPodcastEpisodesByShowSlug,
   extractShowsFromEpisodes,
+  type PodcastPage
 } from './podcastApi';
-import type { PodcastPage } from './podcastApi';
 
-const STALE_TIME = 5 * 60 * 1000; // 5 min - new episodes publish daily, not minute-by-minute
-const SHOW_LIST_STALE_TIME = 30 * 60 * 1000; // 30 min - the set of distinct shows changes far less often than episodes do
+const STALE_TIME = 5 * 60 * 1000; // 5 min — new episodes publish daily, not minute-by-minute
+const SHOW_LIST_STALE_TIME = 30 * 60 * 1000; // 30 min — the set of distinct shows changes far less often than episodes do
 
-/** Paginated global episode feed, for the main Podcast tab. */
-export function usePodcastEpisodesPage(page: number = 1) {
+export function usePodcastEpisodes(page: number = 1) {
   return useQuery({
     queryKey: ['podcasts', 'episodes', page],
     queryFn: () => getPodcastEpisodes(page),
@@ -21,9 +20,10 @@ export function usePodcastEpisodesPage(page: number = 1) {
 }
 
 /**
- * Looks up a single episode by show slug + episode slug, for the episode
- * detail screen. No direct API endpoint exists for this - it pages through
- * the listing under the hood, bounded so it doesn't search forever.
+ * Looks up a single episode by show slug + episode slug for the detail
+ * page (/podcast/:showSlug/:episodeSlug). There's no direct API endpoint
+ * for this — it pages through the listing under the hood, bounded so it
+ * doesn't search forever (see getPodcastEpisodeBySlug).
  */
 export function usePodcastEpisode(showSlug: string | undefined, episodeSlug: string | undefined) {
   return useQuery({
@@ -34,7 +34,12 @@ export function usePodcastEpisode(showSlug: string | undefined, episodeSlug: str
   });
 }
 
-/** All episodes for one show, paginated, for the show screen. */
+/**
+ * All episodes for one show (/podcast/:showSlug), paginated. Confirmed
+ * live: shows are identified by their own `details.name` → `details.slug`
+ * on the podcast API (e.g. "ghanatalks-breakfast-show"), distinct from
+ * each episode's own slug.
+ */
 export function usePodcastShowEpisodes(showSlug: string | undefined, page: number = 1) {
   return useQuery({
     queryKey: ['podcasts', 'show', showSlug, page],
@@ -45,6 +50,16 @@ export function usePodcastShowEpisodes(showSlug: string | undefined, page: numbe
   });
 }
 
+/**
+ * All distinct shows derived from the most recent few pages of episodes —
+ * used to populate the "Podcast" nav dropdown. There's no dedicated "list
+ * shows" endpoint on this backend, only paginated episode listings, so
+ * this scans a bounded number of pages and dedupes by show id. A handful
+ * of pages is enough in practice: there are only a small number of
+ * distinct shows even though episode volume is high (some shows publish
+ * multiple times a day), so new shows surface quickly without needing to
+ * scan deep into history.
+ */
 const SHOW_LIST_SCAN_PAGES = 8;
 
 export function usePodcastShowList() {
@@ -58,7 +73,6 @@ export function usePodcastShowList() {
       const results = await Promise.allSettled(
         Array.from({ length: SHOW_LIST_SCAN_PAGES }, (_, i) => getPodcastEpisodes(i + 1))
       );
-      console.log("ALL RESULT: ", results)
       const allEpisodes = results
         .filter((r): r is PromiseFulfilledResult<PodcastPage> => r.status === 'fulfilled')
         .flatMap((r) => r.value.episodes);

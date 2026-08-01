@@ -1,0 +1,15 @@
+# Release signing secrets - never commit these. debug.keystore is fine to
+# keep tracked (it's the standard RN template debug key, same public
+# password "android" on every install, not a real secret).
+# keystore.properties
+# *.keystore
+!app/debug.keystore
+*.jks
+
+# Machine-local SDK path, not portable between machines
+# local.properties
+
+/.gradle/
+/.kotlin/
+/build/*
+/app/build/*

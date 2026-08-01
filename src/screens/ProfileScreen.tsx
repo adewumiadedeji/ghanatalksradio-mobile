@@ -1,20 +1,30 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, FlatList, StyleSheet, SafeAreaView, Pressable, Alert, ActivityIndicator } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS, SPACING, RADIUS } from '../theme/colors';
 import { SecondaryButton } from '../components/UI';
 import { GuestGate } from '../components/GuestGate';
+import { ArticleDetailModal } from '../components/ArticleDetailModal';
 import { useUserStore } from '../store/userStore';
 import { useBookmarkedArticles } from '../services/queries';
+import { useMyRaffleEntries } from '../services/raffleQueries';
+import { Article } from '../types';
 
 export default function ProfileScreen({ navigation }: any) {
   const user = useUserStore((s) => s.user);
   const logout = useUserStore((s) => s.logout);
+  const toggleBookmark = useUserStore((s) => s.toggleBookmark);
   const {
     data: bookmarkedArticles,
     isLoading: bookmarksLoading,
     isError: bookmarksError,
   } = useBookmarkedArticles(user?.bookmarkedArticleIds ?? []);
+  const { data: raffleEntries } = useMyRaffleEntries(user?.token ?? null);
+
+  const [activeArticle, setActiveArticle] = useState<Article | null>(null);
+  // Likes are a local, cosmetic-only counter (same as NewsScreen.tsx) - there's
+  // no WordPress likes/comments endpoint to persist them to.
+  const [localLikes, setLocalLikes] = useState<Record<string, number>>({});
 
   if (!user) {
     return (
@@ -70,12 +80,17 @@ export default function ProfileScreen({ navigation }: any) {
                   <Text style={styles.statLabel}>Saved</Text>
                 </View>
                 <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{user.raffleEntries.length}</Text>
+                  <Text style={styles.statValue}>{raffleEntries?.length ?? 0}</Text>
                   <Text style={styles.statLabel}>Entries</Text>
                 </View>
               </View>
 
-              <SecondaryButton title="Log Out" onPress={handleLogout} style={{ marginTop: SPACING.md }} />
+              <SecondaryButton
+                title="Change Password"
+                onPress={() => navigation.navigate('ChangePassword')}
+                style={{ marginTop: SPACING.md }}
+              />
+              <SecondaryButton title="Log Out" onPress={handleLogout} style={{ marginTop: SPACING.sm }} />
             </View>
 
             <Text style={styles.sectionTitle}>Saved Articles</Text>
@@ -91,13 +106,28 @@ export default function ProfileScreen({ navigation }: any) {
           )
         }
         renderItem={({ item }) => (
-          <View style={styles.bookmarkCard}>
+          <Pressable style={styles.bookmarkCard} onPress={() => setActiveArticle(item)}>
             <Text style={styles.bookmarkCategory}>{item.category.toUpperCase()}</Text>
             <Text style={styles.bookmarkTitle} numberOfLines={2}>
               {item.title}
             </Text>
-          </View>
+          </Pressable>
         )}
+      />
+
+      <ArticleDetailModal
+        article={activeArticle}
+        likeCount={activeArticle ? activeArticle.likes + (localLikes[activeArticle.id] ?? 0) : 0}
+        isBookmarked={!!activeArticle && !!user.bookmarkedArticleIds.includes(activeArticle.id)}
+        onClose={() => setActiveArticle(null)}
+        onLike={() =>
+          activeArticle &&
+          setLocalLikes((prev) => ({
+            ...prev,
+            [activeArticle.id]: (prev[activeArticle.id] ?? 0) + 1,
+          }))
+        }
+        onBookmark={() => activeArticle && toggleBookmark(activeArticle.id)}
       />
     </SafeAreaView>
   );

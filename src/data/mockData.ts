@@ -1,4 +1,4 @@
-import { Article, Raffle, Poll } from '../types';
+import { Article } from '../types';
 
 // Rebranded from the Stitch prototype's "Global Pulse" placeholder content.
 // Swap this out for src/services/api.ts -> fetchPosts() once you're ready
@@ -75,45 +75,6 @@ export const MOCK_ARTICLES: Article[] = [
     likes: 210,
     views: 1530,
     link: 'https://ghanatalksradio.com/',
-  },
-];
-
-export const MOCK_RAFFLES: Raffle[] = [
-  {
-    id: 'raffle-smartphone',
-    title: 'Win a Brand New Smartphone',
-    subtitle: 'Listener Appreciation Giveaway',
-    cost: 200,
-    totalEntered: 1840,
-    timeRemainingSec: 9912,
-    image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&auto=format&fit=crop&q=80',
-    category: 'Electronics',
-    endingSoon: true,
-    progress: 0.72,
-  },
-  {
-    id: 'raffle-giftpack',
-    title: '₵500 Shopping Voucher',
-    subtitle: 'Mid-Year Mega Raffle',
-    cost: 100,
-    totalEntered: 920,
-    timeRemainingSec: 86400,
-    image: 'https://images.unsplash.com/photo-1607082349566-187342175e2f?w=800&auto=format&fit=crop&q=80',
-    category: 'Shopping',
-    endingSoon: false,
-    progress: 0.35,
-  },
-];
-
-export const MOCK_POLLS: Poll[] = [
-  {
-    id: 'poll-budget',
-    question: 'Do you think the mid-year budget review addresses key economic concerns?',
-    options: [
-      { text: 'Yes, it covers the essentials', votes: 412 },
-      { text: 'No, more is needed', votes: 588 },
-    ],
-    rewardPoints: 25,
   },
 ];
 
