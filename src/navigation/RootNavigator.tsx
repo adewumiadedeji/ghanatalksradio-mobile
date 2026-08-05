@@ -84,12 +84,14 @@ export default function RootNavigator() {
   const initReconnectWatcher = useRadioStore((s) => s.initReconnectWatcher);
   const initAudioInterruptionWatcher = useRadioStore((s) => s.initAudioInterruptionWatcher);
   const initPlaybackStateWatcher = useRadioStore((s) => s.initPlaybackStateWatcher);
+  const initKickWatcher = useRadioStore((s) => s.initKickWatcher);
 
   useEffect(() => {
     initReconnectWatcher();
     initAudioInterruptionWatcher();
     initPlaybackStateWatcher();
-  }, [initReconnectWatcher, initAudioInterruptionWatcher, initPlaybackStateWatcher]);
+    initKickWatcher();
+  }, [initReconnectWatcher, initAudioInterruptionWatcher, initPlaybackStateWatcher, initKickWatcher]);
 
   if (!hasHydrated) {
     return (

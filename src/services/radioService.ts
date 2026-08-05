@@ -6,12 +6,78 @@ import TrackPlayer, {
   State,
 } from 'react-native-track-player';
 import { LIVE_STREAM_URL } from './api';
+import { getSessionStatus, resolveStreamMount, startListeningSession, stopListeningSession } from './streamingApi';
 
 let isSetup = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 3000;
 const SEEK_INTERVAL_SECONDS = 15;
+
+// Set once startListeningSession() resolves (best-effort, never blocks
+// playback - see playLiveStream()). Passed to stopListeningSession() when
+// playback actually stops, so the backend's Live Listeners screen reflects
+// real session durations instead of sessions that never end.
+let currentSessionToken: string | null = null;
+
+async function endCurrentListeningSession() {
+  stopKickPoll();
+  if (!currentSessionToken) return;
+  const token = currentSessionToken;
+  currentSessionToken = null;
+  try {
+    await stopListeningSession(token);
+  } catch {
+    // Best-effort - the backend's own stale-session cleanup closes this
+    // out eventually regardless (CloseStaleListenerSessions).
+  }
+}
+
+// How this app finds out a staff member kicked it off, since there's no
+// real-time push from this backend (see PublicListenController's docblock
+// on the Laravel side) - polling is the honest ceiling here, not a
+// placeholder for something better. Same interval as the admin panel's own
+// live-listeners auto-refresh.
+const KICK_POLL_MS = 15000;
+let kickPollHandle: ReturnType<typeof setInterval> | null = null;
+let onKickedCallback: (() => void) | null = null;
+
+/** Call once at app startup (mirrors registerReconnectHandler's shape) to
+ * learn when a staff member has kicked this listener off. */
+export function registerKickWatcher(onKicked: () => void) {
+  onKickedCallback = onKicked;
+}
+
+function startKickPoll() {
+  stopKickPoll();
+  kickPollHandle = setInterval(async () => {
+    if (!currentSessionToken) return;
+    const token = currentSessionToken;
+    try {
+      const status = await getSessionStatus(token);
+      if (status.active) return;
+      // The token may have already been cleared/replaced by a normal
+      // stop()/reconnect while this request was in flight - only act if
+      // it's still the session we were checking.
+      if (currentSessionToken !== token) return;
+      stopKickPoll();
+      currentSessionToken = null;
+      await TrackPlayer.stop();
+      onKickedCallback?.();
+    } catch {
+      // Network hiccup - try again next tick. Never treat a failed check
+      // as "kicked": that would stop playback on nothing more than a
+      // dropped request.
+    }
+  }, KICK_POLL_MS);
+}
+
+function stopKickPoll() {
+  if (kickPollHandle) {
+    clearInterval(kickPollHandle);
+    kickPollHandle = null;
+  }
+}
 
 export async function setupPlayer() {
   if (isSetup) return;
@@ -46,17 +112,45 @@ export async function setupPlayer() {
 }
 
 export async function playLiveStream() {
+  // Safe to call again mid-session (e.g. the reconnect handler below calls
+  // this directly) - closes out whatever session is still open first so a
+  // reconnect doesn't orphan it.
+  await endCurrentListeningSession();
+
+  // Best-effort, time-boxed (see streamingApi's REQUEST_TIMEOUT_MS) - a slow
+  // or unreachable backend must never delay the listener pressing play, so
+  // this falls back to the hardcoded default mount rather than waiting.
+  let streamUrl = LIVE_STREAM_URL;
+  try {
+    const mount = await resolveStreamMount();
+    streamUrl = mount.stream_url;
+  } catch {
+    // keep the fallback
+  }
+
   await setupPlayer();
   reconnectAttempts = 0;
   await TrackPlayer.reset();
   await TrackPlayer.add({
     id: 'live-stream',
-    url: LIVE_STREAM_URL,
+    url: streamUrl,
     title: 'GhanaTalksRadio — Live',
     artist: 'Live Broadcast',
     isLiveStream: true,
   });
   await TrackPlayer.play();
+
+  // Fire-and-forget, after playback has already started - registering the
+  // session is bookkeeping for the admin panel's Live Listeners screen, not
+  // something a listener should ever wait on.
+  startListeningSession()
+    .then((token) => {
+      currentSessionToken = token;
+      startKickPoll();
+    })
+    .catch(() => {
+      // No session recorded server-side; playback itself is unaffected.
+    });
 }
 
 export async function playEpisode(episode: { id: string | number; title: string; url: string }) {
@@ -82,6 +176,9 @@ export async function resumePlayback() {
 export async function stopPlayback() {
   reconnectAttempts = 0;
   await TrackPlayer.stop();
+  // Fire-and-forget - matches playLiveStream()'s posture that session
+  // bookkeeping should never be on the critical path for playback controls.
+  void endCurrentListeningSession();
 }
 
 // Auto-reconnect logic ported from the Firestick app's RadioPlaybackService:

@@ -26,7 +26,7 @@ function formatSeconds(totalSeconds: number) {
 }
 
 export default function NowPlayingScreen({ navigation }: any) {
-  const { playbackState, nowPlaying, togglePlayPause, playLive, reconnectFailed, stop, seekTo, seekBy } =
+  const { playbackState, nowPlaying, togglePlayPause, playLive, reconnectFailed, kicked, stop, seekTo, seekBy } =
     useRadioStore();
 
   const progress = useProgress(500);
@@ -90,7 +90,11 @@ export default function NowPlayingScreen({ navigation }: any) {
           </View>
         ) : (
           <Text style={styles.subtitle}>
-            {reconnectFailed ? 'Connection lost' : nowPlaying?.subtitle ?? 'Tap play to start'}
+            {reconnectFailed
+              ? 'Connection lost'
+              : kicked
+              ? 'Disconnected by the station'
+              : nowPlaying?.subtitle ?? 'Tap play to start'}
           </Text>
         )}
       </View>

@@ -11,9 +11,25 @@ import {
   registerReconnectHandler,
   registerAudioInterruptionHandler,
   registerPlaybackStateHandler,
+  registerKickWatcher,
   seekTo as seekToService,
   seekBy as seekByService,
 } from '../services/radioService';
+import { getNowPlaying } from '../services/streamingApi';
+
+// How often to re-check what's on the published schedule while the live
+// stream is playing - matches the poll interval LiquidSoap itself uses
+// against the same backend (docs/architecture/07-liquidsoap-integration-
+// guide.md §2), since a programme can change mid-listen.
+const NOW_PLAYING_POLL_MS = 60000;
+let nowPlayingPollHandle: ReturnType<typeof setInterval> | null = null;
+
+function stopNowPlayingPoll() {
+  if (nowPlayingPollHandle) {
+    clearInterval(nowPlayingPollHandle);
+    nowPlayingPollHandle = null;
+  }
+}
 
 // Maps TrackPlayer's real native state onto this app's simpler UI-facing
 // enum. Returns undefined for states with no meaningful UI distinction
@@ -59,6 +75,11 @@ interface RadioState {
   playbackState: PlaybackState;
   nowPlaying: NowPlaying | null;
   reconnectFailed: boolean;
+  /** True after a station moderator ends this listener's session from the
+   * admin panel (see radioService's kick watcher) - distinct from
+   * reconnectFailed (a network problem) so the UI can show a different,
+   * accurate message for each. Cleared on the next playLive(). */
+  kicked: boolean;
   playLive: () => Promise<void>;
   playPodcastEpisode: (episode: PodcastEpisode) => Promise<void>;
   togglePlayPause: () => Promise<void>;
@@ -75,16 +96,19 @@ interface RadioState {
   initReconnectWatcher: () => void;
   initAudioInterruptionWatcher: () => void;
   initPlaybackStateWatcher: () => void;
+  initKickWatcher: () => void;
 }
 
 let reconnectWatcherStarted = false;
 let audioInterruptionWatcherStarted = false;
 let playbackStateWatcherStarted = false;
+let kickWatcherStarted = false;
 
 export const useRadioStore = create<RadioState>((set, get) => ({
   playbackState: 'stopped',
   nowPlaying: null,
   reconnectFailed: false,
+  kicked: false,
 
   // playbackState intentionally isn't set to 'playing' here once the calls
   // below resolve - resolving only means the play command was issued, not
@@ -93,12 +117,38 @@ export const useRadioStore = create<RadioState>((set, get) => ({
   // player is actually doing - otherwise a dead network leaves the mini-player
   // stuck showing "playing" with no sound at all.
   playLive: async () => {
-    set({ playbackState: 'loading', reconnectFailed: false });
+    set({ playbackState: 'loading', reconnectFailed: false, kicked: false });
     try {
       await playLiveStream();
       set({
         nowPlaying: { id: 'live-stream', title: 'Live Broadcast', subtitle: 'GhanaTalksRadio', isLive: true },
       });
+
+      // Best-effort - a slow/unreachable backend just means the generic
+      // "Live Broadcast" title above stays as-is, never blocks playback.
+      const refreshNowPlaying = async () => {
+        try {
+          const programme = await getNowPlaying();
+          // Only overwrite if still showing the live stream - a poll firing
+          // after the listener switched to a podcast episode shouldn't
+          // clobber that episode's metadata.
+          if (!get().nowPlaying?.isLive) return;
+          set({
+            nowPlaying: {
+              id: 'live-stream',
+              title: programme?.name ?? 'Live Broadcast',
+              subtitle: programme?.presenter ?? 'GhanaTalksRadio',
+              isLive: true,
+            },
+          });
+        } catch {
+          // keep whatever's currently shown
+        }
+      };
+
+      stopNowPlayingPoll();
+      refreshNowPlaying();
+      nowPlayingPollHandle = setInterval(refreshNowPlaying, NOW_PLAYING_POLL_MS);
     } catch {
       set({ playbackState: 'error' });
     }
@@ -106,6 +156,7 @@ export const useRadioStore = create<RadioState>((set, get) => ({
 
   playPodcastEpisode: async (episode) => {
     if (!episode.audioUrl) return;
+    stopNowPlayingPoll();
     set({ playbackState: 'loading', reconnectFailed: false });
     try {
       await playEpisodeService({ id: episode.id, title: episode.title, url: episode.audioUrl });
@@ -156,6 +207,7 @@ export const useRadioStore = create<RadioState>((set, get) => ({
   },
 
   stop: async () => {
+    stopNowPlayingPoll();
     await stopPlayback();
     set({ playbackState: 'stopped', nowPlaying: null });
   },
@@ -166,6 +218,18 @@ export const useRadioStore = create<RadioState>((set, get) => ({
 
   seekBy: async (offsetSeconds) => {
     await seekByService(offsetSeconds);
+  },
+
+  // Learns (within one poll interval - see radioService's KICK_POLL_MS)
+  // when a station moderator has ended this listener's session, and stops
+  // playback locally to match what the backend already recorded.
+  initKickWatcher: () => {
+    if (kickWatcherStarted) return;
+    kickWatcherStarted = true;
+    registerKickWatcher(() => {
+      stopNowPlayingPoll();
+      set({ playbackState: 'stopped', nowPlaying: null, kicked: true });
+    });
   },
 
   // Wires the Firestick app's 5-attempt/3s auto-reconnect logic to this store
