@@ -7,6 +7,8 @@ import TrackPlayer, {
 } from 'react-native-track-player';
 import { LIVE_STREAM_URL } from './api';
 import { getSessionStatus, resolveStreamMount, startListeningSession, stopListeningSession } from './streamingApi';
+import { useUserStore } from '../store/userStore';
+import { resolveListenerLocation } from '../utils/geolocation';
 
 let isSetup = false;
 let reconnectAttempts = 0;
@@ -36,8 +38,9 @@ async function endCurrentListeningSession() {
 // How this app finds out a staff member kicked it off, since there's no
 // real-time push from this backend (see PublicListenController's docblock
 // on the Laravel side) - polling is the honest ceiling here, not a
-// placeholder for something better. Same interval as the admin panel's own
-// live-listeners auto-refresh.
+// placeholder for something better. Doesn't need to match the admin
+// panel's own live-listeners auto-refresh interval - the two polls are
+// independent of each other.
 const KICK_POLL_MS = 15000;
 let kickPollHandle: ReturnType<typeof setInterval> | null = null;
 let onKickedCallback: (() => void) | null = null;
@@ -142,10 +145,32 @@ export async function playLiveStream() {
 
   // Fire-and-forget, after playback has already started - registering the
   // session is bookkeeping for the admin panel's Live Listeners screen, not
-  // something a listener should ever wait on.
-  startListeningSession()
-    .then((token) => {
-      currentSessionToken = token;
+  // something a listener should ever wait on. Reads the current user
+  // straight from the store (not a hook - this isn't a React component)
+  // so a signed-in listener's session is attributed to their account
+  // instead of showing as a guest. Location resolution (permission + GPS
+  // + reverse-geocode) can take several seconds and is entirely optional -
+  // resolveListenerLocation() never throws, so a denied permission or GPS
+  // timeout just means the session is recorded without country/region,
+  // same as before this existed.
+  const userToken = useUserStore.getState().user?.token ?? null;
+  resolveListenerLocation()
+    .then((location) =>
+      startListeningSession(
+        location
+          ? {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              country: location.country ?? undefined,
+              region: location.region ?? undefined,
+              city: location.city ?? undefined,
+            }
+          : {},
+        userToken
+      )
+    )
+    .then((sessionToken) => {
+      currentSessionToken = sessionToken;
       startKickPoll();
     })
     .catch(() => {

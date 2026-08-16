@@ -2,18 +2,19 @@ import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useQueryClient } from '@tanstack/react-query';
-import { COLORS, SPACING } from '../theme/colors';
-import { useUserStore } from '../store/userStore';
-import { useVerifyRafflePayment } from '../services/raffleQueries';
+import { COLORS, SPACING } from '../../theme/colors';
+import { useVerifyPayment } from '../../services/raffleQueries';
 
 const REDIRECT_MARKER = 'raffle_payment_redirect';
 
 export default function RafflePaymentScreen({ route, navigation }: any) {
-  const { checkoutUrl, txRef } = route.params as { checkoutUrl: string; txRef: string };
-  const token = useUserStore((s) => s.user?.token);
-  const queryClient = useQueryClient();
-  const verifyPayment = useVerifyRafflePayment();
+  const { checkoutUrl, reference, raffleName, ticketCount } = route.params as {
+    checkoutUrl: string;
+    reference: string;
+    raffleName: string;
+    ticketCount: number;
+  };
+  const verifyPayment = useVerifyPayment();
 
   const [isVerifying, setIsVerifying] = useState(false);
   const handledRedirect = useRef(false);
@@ -27,15 +28,24 @@ export default function RafflePaymentScreen({ route, navigation }: any) {
       handledRedirect.current = true;
       setIsVerifying(true);
 
-      if (!token) return;
       verifyPayment.mutate(
-        { token, txRef },
+        { reference },
         {
           onSuccess: (result) => {
-            queryClient.invalidateQueries({ queryKey: ['raffles', 'active'] });
-            queryClient.invalidateQueries({ queryKey: ['raffles', 'my-entries'] });
+            if (result.status !== 'paid') {
+              setIsVerifying(false);
+              handledRedirect.current = false;
+              Alert.alert(
+                'Payment not confirmed',
+                "We haven't received confirmation of this payment yet. If you completed checkout, try again in a moment."
+              );
+              return;
+            }
             navigation.goBack();
-            Alert.alert('Entry confirmed!', `Your raffle number is ${result.raffleNumber}. Good luck!`);
+            Alert.alert(
+              'Entry confirmed!',
+              `${ticketCount} ticket(s) for "${raffleName}" - good luck!`
+            );
           },
           onError: (err) => {
             setIsVerifying(false);
@@ -48,7 +58,7 @@ export default function RafflePaymentScreen({ route, navigation }: any) {
         }
       );
     },
-    [token, txRef, verifyPayment, queryClient, navigation]
+    [reference, ticketCount, raffleName, verifyPayment, navigation]
   );
 
   return (

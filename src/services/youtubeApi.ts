@@ -1,8 +1,15 @@
+import { STREAMING_API_BASE_URL } from './streamingApi';
+
 /**
- * YouTube live + recent-videos API - same CodeIgniter backend as
- * podcast/auth/raffle. Public, no auth required.
+ * YouTube live + recent-videos API - ghanatalksradio-portal's
+ * App\Http\Controllers\Api\YoutubeController, a faithful port of the
+ * legacy dev.ghanatalksradio.com implementation (same real YouTube Data
+ * API v3 calls, same quota-avoidance strategy via /playlistItems instead
+ * of /search for pagination, same cache/stale-fallback behavior) -
+ * identical response envelope, so this was a drop-in URL change. Public,
+ * no auth required.
  */
-export const YOUTUBE_API_BASE_URL = 'https://dev.ghanatalksradio.com/index.php/api';
+export const YOUTUBE_API_BASE_URL = `${STREAMING_API_BASE_URL}/api`;
 
 export class YoutubeApiError extends Error {
   status: number;
@@ -31,7 +38,7 @@ export async function fetchYoutubeVideos(pageToken?: string): Promise<YoutubeVid
 
   let response: Response;
   try {
-    response = await fetch(`${YOUTUBE_API_BASE_URL}/youtube_videos${query}`, {
+    response = await fetch(`${YOUTUBE_API_BASE_URL}/youtube/videos${query}`, {
       headers: { Accept: 'application/json' },
     });
   } catch (networkErr) {

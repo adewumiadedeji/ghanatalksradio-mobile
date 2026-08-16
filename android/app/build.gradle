@@ -90,8 +90,8 @@ android {
         applicationId "com.ghanatalksradio"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 53
-        versionName "1.5.22"
+        versionCode 56
+        versionName "1.5.25"
     }
     signingConfigs {
         debug {
@@ -135,3 +135,8 @@ dependencies {
 }
 
 apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
+
+// Must be applied after the Android/Kotlin plugins above - reads
+// google-services.json and wires the Firebase config into the build
+// (push notifications via @react-native-firebase/messaging).
+apply plugin: "com.google.gms.google-services"

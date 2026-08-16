@@ -14,7 +14,7 @@ export function usePollList(token: string | null) {
 export function useVoteMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { token: string; pollId: number; optionId: number }) =>
+    mutationFn: (vars: { token: string; pollId: string; optionId: number }) =>
       voteOnPoll(vars.token, vars.pollId, vars.optionId),
     onSuccess: (updatedPoll: PollDto) => {
       queryClient.setQueriesData<PollDto[] | undefined>({ queryKey: POLLS_QUERY_KEY }, (old: PollDto[] | undefined) =>

@@ -4,6 +4,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Coarse only (not FINE) - the Live Listeners map only needs
+         country/region-level accuracy, see src/utils/geolocation.ts. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Android 13+ (API 33) requires this to be both declared here and
+         requested at runtime before any notification can show - see
+         src/services/pushNotifications.ts. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Package visibility (Android 11+/API 30+): needed for Linking.canOpenURL()
          to correctly detect these apps when installed, for join/share buttons. -->

@@ -132,7 +132,7 @@ export default function LoginScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: COLORS.surface },
+  flex: {backgroundColor: COLORS.surface },
   closeButton: { alignSelf: 'flex-end', padding: SPACING.sm },
   container: {
     flexGrow: 1,
@@ -140,7 +140,10 @@ const styles = StyleSheet.create({
     gap: SPACING.xl,
     justifyContent: 'center',
   },
-  header: { alignItems: 'center', gap: SPACING.sm },
+  header: { 
+    alignItems: 'center', 
+    gap: SPACING.sm 
+  },
   appName: {
     fontSize: 36,
     fontWeight: '700',

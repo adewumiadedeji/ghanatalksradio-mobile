@@ -64,7 +64,7 @@ export default function DiscoverScreen({ navigation }: any) {
     navigation.navigate('YoutubeVideo', { videoId: video.videoId, title: video.title });
   };
 
-  const handleVote = (pollId: number, optionId: number) => {
+  const handleVote = (pollId: string, optionId: number) => {
     if (!user) {
       Alert.alert('Sign in to vote', 'Create a free account or sign in to vote on this poll.', [
         { text: 'Cancel', style: 'cancel' },
@@ -72,7 +72,14 @@ export default function DiscoverScreen({ navigation }: any) {
       ]);
       return;
     }
-    voteMutation.mutate({ token: user.token, pollId, optionId });
+    voteMutation.mutate(
+      { token: user.token, pollId, optionId },
+      {
+        onError: (e) => {
+          Alert.alert('Could not record your vote', e instanceof Error ? e.message : 'Please try again.');
+        },
+      }
+    );
   };
 
   return (
@@ -115,13 +122,23 @@ export default function DiscoverScreen({ navigation }: any) {
                   <Text style={styles.emptyText}>No polls right now — check back soon.</Text>
                 ) : (
                   polls.map((poll: PollDto) => {
-                    const totalVotes = poll.options.reduce((sum: number, o: PollOptionDto) => sum + o.votes, 0);
+                    // Results are hidden (not "zero votes") when every
+                    // option's `votes` is null - see pollsApi.ts's
+                    // docblock. Only show the fill bar/percentages once
+                    // there's a real count to show, even if this device
+                    // has already voted.
+                    const resultsHidden = poll.options.every((o) => o.votes === null);
+                    const totalVotes = poll.options.reduce((sum: number, o: PollOptionDto) => sum + (o.votes ?? 0), 0);
                     const voted = poll.your_option_id !== null;
+                    const showResults = voted && !resultsHidden;
                     return (
                       <View key={poll.id} style={styles.pollCard}>
                         <Text style={styles.pollQuestion}>{poll.question}</Text>
+                        {poll.sponsor && (
+                          <Text style={styles.pollSponsor}>Sponsored by {poll.sponsor.name}</Text>
+                        )}
                         {poll.options.map((option: PollOptionDto) => {
-                          const pct = totalVotes ? Math.round((option.votes / totalVotes) * 100) : 0;
+                          const pct = totalVotes ? Math.round(((option.votes ?? 0) / totalVotes) * 100) : 0;
                           return (
                             <Pressable
                               key={option.id}
@@ -129,13 +146,16 @@ export default function DiscoverScreen({ navigation }: any) {
                               onPress={() => handleVote(poll.id, option.id)}
                               disabled={voted}
                             >
-                              {voted && <View style={[styles.pollFill, { width: `${pct}%` }]} />}
+                              {showResults && <View style={[styles.pollFill, { width: `${pct}%` }]} />}
                               <Text style={styles.pollOptionText}>{option.text}</Text>
-                              {voted && <Text style={styles.pollPct}>{pct}%</Text>}
+                              {showResults && <Text style={styles.pollPct}>{pct}%</Text>}
                             </Pressable>
                           );
                         })}
-                        {!voted && (
+                        {voted && resultsHidden && (
+                          <Text style={styles.pollReward}>Vote recorded - results are hidden until this poll closes.</Text>
+                        )}
+                        {!voted && poll.reward_points > 0 && (
                           <Text style={styles.pollReward}>Vote to earn +{poll.reward_points} points</Text>
                         )}
                       </View>
@@ -293,6 +313,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   pollQuestion: { fontSize: 16, fontWeight: '600', color: COLORS.onSurface },
+  pollSponsor: { fontSize: 12, color: COLORS.onSurfaceVariant, fontStyle: 'italic' },
   pollOption: {
     borderWidth: 1,
     borderColor: COLORS.outlineVariant,

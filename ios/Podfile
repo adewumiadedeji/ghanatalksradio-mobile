@@ -26,6 +26,35 @@ end
 target 'GhanaTalksRadio' do
   config = use_native_modules!
 
+  # Firebase's own pods increasingly `@import` each other as real Clang
+  # modules internally (not classic #import), which needs modular headers
+  # to build as static libraries without use_frameworks! - every pod in
+  # this dependency graph needs it, or whichever one is missing it fails
+  # with "Module 'X' not found" (seen one at a time: GoogleUtilities,
+  # then FirebaseCore...). Scoped to just Firebase's own pods rather than
+  # a global use_modular_headers! - that forced React's OWN internal pods
+  # (React-RuntimeHermes, React-RuntimeCore) into modular mode too, which
+  # they don't support, causing "Redefinition of module 'react_runtime'"
+  # build failures.
+  # Deliberately NOT declaring the bare 'Firebase' umbrella pod here - it
+  # resolves to its default subspecs, which pull in FirebaseAnalytics (and
+  # GoogleAppMeasurement/GoogleAdsOnDeviceConversion with it) - tracking
+  # this app never asked for and that needs its own App Tracking
+  # Transparency handling. @react-native-firebase/messaging's own podspec
+  # already declares exactly the Firebase subspecs it needs; the pods
+  # below just need modular headers, not a redeclared dependency.
+  %w[
+    FirebaseCore
+    FirebaseCoreExtension
+    FirebaseCoreInternal
+    FirebaseInstallations
+    FirebaseMessaging
+    GoogleDataTransport
+    GoogleUtilities
+    PromisesObjC
+    nanopb
+  ].each { |pod_name| pod pod_name, :modular_headers => true }
+
   use_react_native!(
     :path => config[:reactNativePath],
     :hermes_enabled => false,

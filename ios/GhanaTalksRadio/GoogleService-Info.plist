@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>354924560496-djbsqus0kfke97q36l9naugjmb4hm65r.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.354924560496-djbsqus0kfke97q36l9naugjmb4hm65r</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>354924560496-0canmjlj6h2vq5e41e4n27aaffu98ofm.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyA_EW7z-AUnM476i7KQ4DGC1itl4q07PSY</string>
+	<key>GCM_SENDER_ID</key>
+	<string>354924560496</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.ghanatalksradio</string>
+	<key>PROJECT_ID</key>
+	<string>ghanatalksradio-bad6a</string>
+	<key>STORAGE_BUCKET</key>
+	<string>ghanatalksradio-bad6a.appspot.com</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:354924560496:ios:4e41bcc620d486a74974b5</string>
+	<key>DATABASE_URL</key>
+	<string>https://ghanatalksradio-bad6a.firebaseio.com</string>
+</dict>
+</plist>

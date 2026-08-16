@@ -1,0 +1,138 @@
+{
+  "project_info": {
+    "project_number": "354924560496",
+    "firebase_url": "https://ghanatalksradio-bad6a.firebaseio.com",
+    "project_id": "ghanatalksradio-bad6a",
+    "storage_bucket": "ghanatalksradio-bad6a.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:354924560496:android:69423ec8a8688b0d4974b5",
+        "android_client_info": {
+          "package_name": "com.ghanatalksradio"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "354924560496-0canmjlj6h2vq5e41e4n27aaffu98ofm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ghanatalksradio",
+            "certificate_hash": "85892e973d43f7b8e971b3f506bacc3c22349a55"
+          }
+        },
+        {
+          "client_id": "354924560496-q63fh2ep7lmb9np0hg4o66bmr7hjjm1k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ghanatalksradio",
+            "certificate_hash": "ac6424603086dc0ca3a1e5ec74fc3a19e3677884"
+          }
+        },
+        {
+          "client_id": "354924560496-cd8rhtrs6afapgkvrbpr44oiqm6476po.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDc8yNNgL0Nof9GSi4IW1_vPMYMOiEdOWg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "354924560496-cd8rhtrs6afapgkvrbpr44oiqm6476po.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "354924560496-djbsqus0kfke97q36l9naugjmb4hm65r.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.ghanatalksradio",
+                "app_store_id": "1511977360"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:354924560496:android:74471d451f67a0824974b5",
+        "android_client_info": {
+          "package_name": "com.ghanatalksradio.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "354924560496-cd8rhtrs6afapgkvrbpr44oiqm6476po.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDc8yNNgL0Nof9GSi4IW1_vPMYMOiEdOWg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "354924560496-cd8rhtrs6afapgkvrbpr44oiqm6476po.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "354924560496-djbsqus0kfke97q36l9naugjmb4hm65r.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.ghanatalksradio",
+                "app_store_id": "1511977360"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:354924560496:android:545fc1d81ed1e2184974b5",
+        "android_client_info": {
+          "package_name": "com.ghanatalksradio.tv"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "354924560496-cd8rhtrs6afapgkvrbpr44oiqm6476po.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDc8yNNgL0Nof9GSi4IW1_vPMYMOiEdOWg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "354924560496-cd8rhtrs6afapgkvrbpr44oiqm6476po.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "354924560496-djbsqus0kfke97q36l9naugjmb4hm65r.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.ghanatalksradio",
+                "app_store_id": "1511977360"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

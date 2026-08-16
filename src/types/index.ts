@@ -22,7 +22,6 @@ export interface UserInfo {
   phone: string | null;
   token: string;
   points: number;
-  isPremium: boolean;
   registeredAt: string;
   bookmarkedArticleIds: string[];
 }

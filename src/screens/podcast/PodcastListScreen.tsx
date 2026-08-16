@@ -13,6 +13,8 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS, SPACING, RADIUS } from '../../theme/colors';
 import { useRadioStore } from '../../store/radioStore';
 import { usePodcastShowList } from '../../services/podcastQueries';
+import { useBroadcastStatus } from '../../services/streamingQueries';
+import { useRefetchOnFocus } from '../../hooks/useRefetchOnFocus';
 import { PodcastShow } from '../../types/podcast';
 
 /**
@@ -40,8 +42,8 @@ export default function PodcastListScreen({ navigation }: any) {
     error: showsErrorObj,
     refetch: refetchShows,
   } = usePodcastShowList();
-
-  
+  const { data: isStudioLive, refetch: refetchBroadcastStatus } = useBroadcastStatus();
+  useRefetchOnFocus(refetchBroadcastStatus);
 
   const isLiveActive = nowPlaying?.isLive && playbackState !== 'stopped';
 
@@ -62,27 +64,40 @@ export default function PodcastListScreen({ navigation }: any) {
               </Text>
             </View>
 
+            {/* Always shown - the stream is always listenable (LiquidSoap
+                falls back to music automatically whenever no presenter is
+                live, see docs/architecture's LiquidSoap guide), so this
+                card should always offer a way to listen, not disappear.
+                isStudioLive (Admin > Broadcast > Studio Sessions) only
+                changes the label/styling between "a presenter is on air"
+                and "fallback music is playing" - not tied to
+                isLiveActive, which only reflects this device's own
+                playback state. */}
             <Pressable
-              style={styles.liveCard}
+              style={[styles.liveCard, !isStudioLive && styles.liveCardMusic]}
               onPress={() => {
                 if (!isLiveActive) playLive();
                 navigation.navigate('NowPlaying');
               }}
             >
               <View style={styles.liveCardLeft}>
-                <View style={styles.pulseDot} />
+                <View style={[styles.pulseDot, !isStudioLive && styles.pulseDotMusic]} />
                 <View>
-                  <Text style={styles.liveLabel}>LIVE NOW</Text>
-                  <Text style={styles.liveTitle}>GhanaTalksRadio Broadcast</Text>
+                  <Text style={[styles.liveLabel, !isStudioLive && styles.liveLabelMusic]}>
+                    {isStudioLive ? 'LIVE NOW' : 'ON AIR'}
+                  </Text>
+                  <Text style={[styles.liveTitle, !isStudioLive && styles.liveTitleMusic]}>
+                    {isStudioLive ? 'GhanaTalksRadio Broadcast' : 'Listen to Live Music'}
+                  </Text>
                 </View>
               </View>
               {playbackState === 'loading' ? (
-                <ActivityIndicator color={COLORS.onPrimary} />
+                <ActivityIndicator color={isStudioLive ? COLORS.onPrimary : COLORS.onSurface} />
               ) : (
                 <Ionicons
                   name={isLiveActive && playbackState === 'playing' ? 'pause-circle' : 'play-circle'}
                   size={40}
-                  color={COLORS.onPrimary}
+                  color={isStudioLive ? COLORS.onPrimary : COLORS.onSurface}
                 />
               )}
             </Pressable>
@@ -163,14 +178,20 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
   },
   liveCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  liveCardMusic: { backgroundColor: COLORS.surfaceContainer },
   pulseDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: COLORS.onTertiaryContainer,
   },
+  // No pulse animation for the fallback-music state - pulsing implies a
+  // presenter is live right now, which wouldn't be true here.
+  pulseDotMusic: { backgroundColor: COLORS.outline },
   liveLabel: { color: COLORS.outlineVariant, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  liveLabelMusic: { color: COLORS.onSurfaceVariant },
   liveTitle: { color: COLORS.onPrimary, fontSize: 16, fontWeight: '700' },
+  liveTitleMusic: { color: COLORS.onSurface },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',

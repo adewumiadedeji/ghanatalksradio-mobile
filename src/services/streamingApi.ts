@@ -7,17 +7,20 @@
  * map) + regional stream mount resolution. See that backend's
  * PublicListenController and StreamMountController.
  *
- * Sessions are always anonymous/guest for now (no bearer token sent) -
- * auth against this backend is a separate, not-yet-done integration pass,
- * and guest sessions are a fully supported, intentional case server-side
- * (user_id is nullable), not a placeholder.
+ * Sessions are guest (anonymous) by default - that's a fully supported,
+ * intentional case server-side (user_id is nullable) - but callers that
+ * have a signed-in user's token should pass it through so
+ * PublicListenController::resolveUserId() can attribute the session to a
+ * real account instead. radioService.ts's playLiveStream() is the one
+ * that actually reads the current session from userStore and passes it
+ * along.
  */
 
 // iOS Simulator: localhost works as-is (shares the Mac's network).
 // Android Emulator: use 10.0.2.2 instead of localhost.
 // Physical device (either OS): use your Mac's LAN IP instead - "localhost"
 // on a physical device means the device itself, not your Mac.
-const LOCAL_DEV_URL = 'https://9363-2605-59c0-ec3-3508-546-62ac-e45f-c18e.ngrok-free.app';
+const LOCAL_DEV_URL = 'https://app.ghanatalksradio.com';
 const PROD_URL = 'https://app.ghanatalksradio.com';
 
 export const STREAMING_API_BASE_URL = __DEV__ ? LOCAL_DEV_URL : PROD_URL;
@@ -96,11 +99,17 @@ export interface StartSessionParams {
 }
 
 /** Registers a listening session server-side. Returns a session_token that
- * must be passed to stopListeningSession() when playback actually stops. */
-export async function startListeningSession(params: StartSessionParams = {}): Promise<string> {
+ * must be passed to stopListeningSession() when playback actually stops.
+ * Pass the signed-in user's token (if any) so the session is attributed
+ * to their account instead of showing as a guest on the admin's Live
+ * Listeners screen - PublicListenController::resolveUserId() reads it
+ * the same way EnsureAccountAuthenticated does, via the Authorization
+ * header only (no query-param fallback like the legacy CI backend). */
+export async function startListeningSession(params: StartSessionParams = {}, token?: string | null): Promise<string> {
   const data = await callApi<{ session_token: string }>('/api/listen/start', {
     method: 'POST',
     body: JSON.stringify({ platform: 'mobile', ...params }),
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   return data.session_token;
 }
@@ -142,4 +151,16 @@ export interface NowPlayingProgramme {
 export async function getNowPlaying(): Promise<NowPlayingProgramme | null> {
   const data = await callApi<{ programme: NowPlayingProgramme | null }>('/api/now-playing');
   return data.programme;
+}
+
+/** Is a presenter actually on air right now (the manual Go live/End
+ * broadcast toggle staff use in Admin > Broadcast > Studio Sessions) -
+ * distinct from getNowPlaying(), which answers "what *should* be airing"
+ * from the published schedule. The stream itself never goes silent
+ * between shows (see LiquidSoap's fallback chain), so this is purely a
+ * "is someone actually presenting" indicator, e.g. for the Podcast
+ * screen's LIVE NOW card. */
+export async function getBroadcastStatus(): Promise<boolean> {
+  const data = await callApi<{ is_live: boolean }>('/api/broadcast/status');
+  return data.is_live;
 }

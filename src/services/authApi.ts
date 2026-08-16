@@ -1,11 +1,23 @@
 /**
- * Auth API for the CodeIgniter backend at dev.ghanatalksradio.com - a
- * separate PHP app from the WordPress REST API and from the podcast/catchup
- * API, but on the same host. Reads request bodies via CI's
- * $this->input->post(), which expects standard form-encoded bodies, NOT
- * JSON - every request here sends `application/x-www-form-urlencoded`.
+ * Auth API - ghanatalksradio-portal's Modules/Identity (see
+ * AuthController), the sole backend for auth now. Previously this file
+ * split dev/prod between this Laravel backend and the legacy
+ * dev.ghanatalksradio.com CodeIgniter host; that split is gone now that
+ * real user accounts have been migrated into Laravel's `users` table -
+ * both web and the app now show the same account data. A legacy account
+ * still gets the same forced-password-reset flow it always did
+ * (AuthController detects the old md5 hash and routes it through
+ * resetPassword() automatically - see that method's docblock), so a
+ * migrated user's first login just prompts a password change, not a
+ * failure.
+ *
+ * `deleteAccount` has no Laravel route yet (Identity's public API
+ * doesn't expose one) - calling it throws a clear error instead of a
+ * confusing 404.
  */
-export const AUTH_API_BASE_URL = 'https://dev.ghanatalksradio.com/index.php/api';
+import { STREAMING_API_BASE_URL } from './streamingApi';
+
+const AUTH_BASE_URL = `${STREAMING_API_BASE_URL}/api/auth`;
 
 export class AuthApiError extends Error {
   status: number;
@@ -45,61 +57,34 @@ export interface AuthResult {
   expiresAt: string;
 }
 
-async function postForm(path: string, fields: Record<string, string>, token?: string): Promise<any> {
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    'Content-Type': 'application/x-www-form-urlencoded',
-  };
-  // Sent both ways deliberately: some shared-hosting PHP setups strip the
-  // Authorization header before it reaches the app, so the token also
-  // rides along as a plain form field, which the backend accepts as a
-  // fallback (see Api.php's _extract_token()).
-  const body = token ? { ...fields, token } : fields;
+/** Laravel's AuthController reads $request->input(), which parses a JSON
+ * body just as happily as form-encoded - the token only ever needs to go
+ * in the Authorization header (account.auth's EnsureAccountAuthenticated
+ * has no query/body fallback, unlike the old CI backend did). */
+async function authRequest(method: 'GET' | 'POST', path: string, body?: Record<string, unknown>, token?: string): Promise<any> {
+  const headers: Record<string, string> = { Accept: 'application/json', 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let response: Response;
   try {
-    response = await fetch(`${AUTH_API_BASE_URL}/${path}`, {
-      method: 'POST',
+    response = await fetch(`${AUTH_BASE_URL}/${path}`, {
+      method,
       headers,
-      body: new URLSearchParams(body).toString(),
+      body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
     });
   } catch (networkErr) {
     throw new AuthApiError(`Network error reaching auth API: ${(networkErr as Error).message}`, 0);
   }
 
-  if (!response.ok) {
-    throw new AuthApiError(`Auth API request failed (${response.status})`, response.status);
-  }
-
-  const json = await response.json();
-  if (json?.status !== true) {
-    throw new AuthApiError(json?.message || 'Auth API returned an error', 200);
+  const json = await response.json().catch(() => null);
+  if (!json || json.status !== true) {
+    throw new AuthApiError(json?.message || `Auth API request failed (${response.status})`, response.status);
   }
   return json.data;
 }
 
-async function getWithToken(path: string, token: string): Promise<any> {
-  let response: Response;
-  try {
-    // token is also passed as a query param for the same reason as
-    // postForm() includes it in the body - see comment there.
-    response = await fetch(`${AUTH_API_BASE_URL}/${path}?token=${encodeURIComponent(token)}`, {
-      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-    });
-  } catch (networkErr) {
-    throw new AuthApiError(`Network error reaching auth API: ${(networkErr as Error).message}`, 0);
-  }
-
-  if (!response.ok) {
-    throw new AuthApiError(`Auth API request failed (${response.status})`, response.status);
-  }
-
-  const json = await response.json();
-  if (json?.status !== true) {
-    throw new AuthApiError(json?.message || 'Auth API returned an error', 200);
-  }
-  return json.data;
+function toAuthResult(data: any): AuthResult {
+  return { user: data.user, token: data.token, expiresAt: data.expires_at };
 }
 
 export async function registerUser(
@@ -108,27 +93,27 @@ export async function registerUser(
   password: string,
   phone?: string
 ): Promise<AuthResult> {
-  const data = await postForm('register', { name, email, password, phone: phone ?? '' });
-  return { user: data.user, token: data.token, expiresAt: data.expires_at };
+  const data = await authRequest('POST', 'register', { name, email, password, phone: phone ?? '' });
+  return toAuthResult(data);
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthResult> {
-  const data = await postForm('login', { email, password });
+  const data = await authRequest('POST', 'login', { email, password });
   if (data?.requires_password_reset) {
     throw new PasswordResetRequiredError(data.reset_ticket);
   }
-  return { user: data.user, token: data.token, expiresAt: data.expires_at };
+  return toAuthResult(data);
 }
 
 export async function resetPassword(resetTicket: string, newPassword: string): Promise<AuthResult> {
-  const data = await postForm('reset_password', { reset_ticket: resetTicket, new_password: newPassword });
-  return { user: data.user, token: data.token, expiresAt: data.expires_at };
+  const data = await authRequest('POST', 'reset-password', { reset_ticket: resetTicket, new_password: newPassword });
+  return toAuthResult(data);
 }
 
 /** Always resolves (the backend intentionally never reveals whether the
  * email is registered) - just triggers a PIN email if it is. */
 export async function forgotPassword(email: string): Promise<void> {
-  await postForm('forgot_password', { email });
+  await authRequest('POST', 'forgot-password', { email });
 }
 
 export async function confirmPasswordResetPin(
@@ -136,25 +121,27 @@ export async function confirmPasswordResetPin(
   pin: string,
   newPassword: string
 ): Promise<AuthResult> {
-  const data = await postForm('confirm_password_reset_pin', { email, pin, new_password: newPassword });
-  return { user: data.user, token: data.token, expiresAt: data.expires_at };
+  const data = await authRequest('POST', 'confirm-password-reset-pin', { email, pin, new_password: newPassword });
+  return toAuthResult(data);
 }
 
 export async function changePassword(token: string, newPassword: string): Promise<void> {
-  await postForm('change_password', { new_password: newPassword }, token);
+  await authRequest('POST', 'change-password', { new_password: newPassword }, token);
 }
 
 export async function logoutUser(token: string): Promise<void> {
-  await postForm('logout', {}, token);
+  await authRequest('POST', 'logout', {}, token);
 }
 
-/** Permanently deletes the account server-side (wp_account + related rows).
- * Irreversible - see userStore.deleteAccount() for the confirmation flow. */
-export async function deleteAccount(token: string): Promise<void> {
-  await postForm('delete_account', {}, token);
+/** Permanently deletes the account server-side. Irreversible - see
+ * userStore.deleteAccount() for the confirmation flow. Laravel's
+ * Identity module doesn't expose this yet (no route) - fails loudly
+ * rather than silently 404ing. */
+export async function deleteAccount(_token: string): Promise<void> {
+  throw new AuthApiError('Account deletion is not available yet.', 0);
 }
 
 export async function fetchMe(token: string): Promise<AuthUser> {
-  const data = await getWithToken('me', token);
+  const data = await authRequest('GET', 'me', undefined, token);
   return data.user;
 }

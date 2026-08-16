@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { View, Text, FlatList, StyleSheet, SafeAreaView, Pressable, Alert, ActivityIndicator } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS, SPACING, RADIUS } from '../theme/colors';
 import { SecondaryButton } from '../components/UI';
 import { GuestGate } from '../components/GuestGate';
@@ -92,12 +91,6 @@ export default function ProfileScreen({ navigation }: any) {
               </View>
               <Text style={styles.name}>{user.name}</Text>
               <Text style={styles.email}>{user.email}</Text>
-              {user.isPremium && (
-                <View style={styles.premiumPill}>
-                  <Ionicons name="star" size={12} color={COLORS.onSecondary} />
-                  <Text style={styles.premiumText}>Premium Member</Text>
-                </View>
-              )}
 
               <View style={styles.statsRow}>
                 <View style={styles.statBox}>
@@ -194,17 +187,6 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 26, fontWeight: '700', color: COLORS.onSecondaryContainer },
   name: { fontSize: 20, fontWeight: '700', color: COLORS.onSurface },
   email: { fontSize: 13, color: COLORS.onSurfaceVariant },
-  premiumPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.secondary,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: RADIUS.pill,
-    marginTop: 6,
-  },
-  premiumText: { color: COLORS.onSecondary, fontSize: 11, fontWeight: '700' },
   statsRow: { flexDirection: 'row', gap: SPACING.lg, marginTop: SPACING.md },
   statBox: { alignItems: 'center' },
   statValue: { fontSize: 20, fontWeight: '700', color: COLORS.onSurface },

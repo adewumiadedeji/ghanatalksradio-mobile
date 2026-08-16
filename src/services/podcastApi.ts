@@ -1,12 +1,15 @@
-import { normalizePodcastItem2 } from '../utils/podcastContent';
-import type { PodcastEpisode } from '../types/podcast';
+import { isPlayableAudioUrl } from '../utils/podcastContent';
+import type { PodcastEpisode, PodcastEpisodeRaw, PodcastSeriesRaw, PodcastShow } from '../types/podcast';
+import { STREAMING_API_BASE_URL } from './streamingApi';
 
 /**
- * Confirmed live base URL for the podcast/catchup API. Separate PHP backend
- * from the WordPress REST API used elsewhere - different domain, different
- * conventions (path-segment pagination, not query params).
+ * ghanatalksradio-portal's Modules/Podcast (see PublicPodcastController) -
+ * replaces the legacy dev.ghanatalksradio.com podcast/catchup API. Real
+ * per-show and per-episode endpoints exist now, so this file is a lot
+ * simpler than its predecessor: no more scanning the global feed
+ * client-side to find one show's episodes or one specific episode.
  */
-export const PODCAST_API_BASE_URL = 'https://dev.ghanatalksradio.com/index.php/api/podcast';
+export const PODCAST_API_BASE_URL = `${STREAMING_API_BASE_URL}/api/podcasts`;
 
 export class PodcastApiError extends Error {
   status: number;
@@ -17,107 +20,111 @@ export class PodcastApiError extends Error {
   }
 }
 
+async function apiGet<T>(path: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${PODCAST_API_BASE_URL}${path}`, { headers: { Accept: 'application/json' } });
+  } catch (networkErr) {
+    throw new PodcastApiError(`Network error reaching podcast API: ${(networkErr as Error).message}`, 0);
+  }
+  const json = await response.json().catch(() => null);
+  if (!json) {
+    throw new PodcastApiError(`Podcast API request failed (${response.status})`, response.status);
+  }
+  if (json.status === false) {
+    throw new PodcastApiError(json.message || 'Podcast API returned an error', 200);
+  }
+  return json.data as T;
+}
+
+function toShow(series: PodcastSeriesRaw): PodcastShow {
+  return {
+    id: series.slug,
+    name: series.name,
+    imageUrl: series.image_url,
+    slug: series.slug,
+    external: series.external_links ?? {},
+  };
+}
+
+function toEpisode(episode: PodcastEpisodeRaw, show: PodcastShow): PodcastEpisode {
+  const audioUrl = episode.audio_url && isPlayableAudioUrl(episode.audio_url) ? episode.audio_url : null;
+
+  return {
+    id: `${show.slug}-${episode.slug}`,
+    showId: show.slug,
+    startDate: episode.published_at ?? '',
+    endDate: '',
+    audioUrl,
+    description: episode.description?.trim() ?? '',
+    title: episode.title?.trim() ?? 'Untitled episode',
+    slug: episode.slug,
+    external: episode.external_links ?? {},
+    show,
+  };
+}
+
 export interface PodcastPage {
   episodes: PodcastEpisode[];
   page: number;
-  /** True if this page came back with a full page of results, suggesting a
-   * next page likely exists. The API gives no total count, so this is a
-   * heuristic, not a guarantee - same as the web version. */
   hasMore: boolean;
 }
 
-const PAGE_SIZE = 10; // Confirmed: both page 1 and page 2 returned exactly 10 items each.
-
-/**
- * Fetches one page of podcast episodes. Pagination is a path segment
- * (/index.php/api/podcast/{page}/), not a query string param.
- */
+/** Recent episodes across every show, newest first - GET /podcasts/episodes/{page}. */
 export async function getPodcastEpisodes(page: number = 1): Promise<PodcastPage> {
-  const url = `${PODCAST_API_BASE_URL}/${page}/`;
-
-  let response: Response;
-  try {
-    response = await fetch(url, { headers: { Accept: 'application/json' } });
-  } catch (networkErr) {
-    throw new PodcastApiError(
-      `Network error reaching podcast API: ${(networkErr as Error).message}`,
-      0
-    );
-  }
-
-  if (!response.ok) {
-    throw new PodcastApiError(`Podcast API request failed (${response.status})`, response.status);
-  }
-
-  const json: any = await response.json();
-
-  if (json?.status === false) {
-    throw new PodcastApiError(json.message || 'Podcast API returned an error', 200);
-  }
-
-  // Defensive shape handling - the precise response envelope wasn't directly
-  // verifiable from this sandbox (no network access to dev.ghanatalksradio.com).
-  const rawItems: any[] = Array.isArray(json)
-    ? json
-    : json?.data ?? json?.episodes ?? json?.results ?? [];
-
-  const episodes = rawItems.map(normalizePodcastItem2);
+  const data = await apiGet<{
+    episodes: Array<{ episode: PodcastEpisodeRaw; series: PodcastSeriesRaw }>;
+    page: number;
+    has_more: boolean;
+  }>(`/episodes/${page}`);
 
   return {
-    episodes,
-    page,
-    hasMore: episodes.length >= PAGE_SIZE,
+    episodes: data.episodes.map((item) => toEpisode(item.episode, toShow(item.series))),
+    page: data.page,
+    hasMore: data.has_more,
   };
 }
 
 export interface ShowEpisodesPage {
   episodes: PodcastEpisode[];
-  show: PodcastEpisode['show'] | null;
+  show: PodcastShow | null;
   hasMore: boolean;
   searchExhausted: boolean;
 }
 
-/** Max pages to search through when looking up a single show/episode - there's
- * no per-show filter or single-episode endpoint on this API, only paginated
- * global listing, so this bounds how far back to dig before giving up. */
-const MAX_LOOKUP_PAGES = 20; // ~200 episodes, roughly the last few weeks of broadcasts.
+const SHOW_PAGE_SIZE = 10;
 
-/**
- * Fetches one "page" of episodes for a specific show, by walking the global
- * paginated listing and collecting matches client-side (no per-show filter
- * param exists on this API).
- */
+/** All episodes for one show - GET /podcasts/{slug} returns the full list
+ * (the backend doesn't paginate per-show, there's no need to at today's
+ * volume), paginated client-side to match the screen's existing
+ * page-at-a-time UI. `searchExhausted` is always false now - there's
+ * nothing to give up searching for, the backend just tells us directly
+ * if the show doesn't exist. */
 export async function getPodcastEpisodesByShowSlug(
   showSlug: string,
   page: number = 1
 ): Promise<ShowEpisodesPage> {
-  const targetCount = page * PAGE_SIZE;
-  const matches: PodcastEpisode[] = [];
-  let show: PodcastEpisode['show'] | null = null;
-  let globalPage = 1;
-  let globalHasMore = true;
-
-  while (matches.length < targetCount + 1 && globalHasMore && globalPage <= MAX_LOOKUP_PAGES) {
-    const result = await getPodcastEpisodes(globalPage);
-    for (const ep of result.episodes) {
-      if (ep.show.slug === showSlug) {
-        matches.push(ep);
-        if (!show) show = ep.show;
-      }
+  let data: { series: PodcastSeriesRaw; episodes: PodcastEpisodeRaw[] };
+  try {
+    data = await apiGet(`/${encodeURIComponent(showSlug)}`);
+  } catch (err) {
+    if (err instanceof PodcastApiError) {
+      return { episodes: [], show: null, hasMore: false, searchExhausted: false };
     }
-    globalHasMore = result.hasMore;
-    globalPage += 1;
+    throw err;
   }
 
-  const start = (page - 1) * PAGE_SIZE;
-  const pageItems = matches.slice(start, start + PAGE_SIZE);
-  const hasMore = matches.length > targetCount;
+  const show = toShow(data.series);
+  const allEpisodes = data.episodes.map((e) => toEpisode(e, show));
+
+  const start = (page - 1) * SHOW_PAGE_SIZE;
+  const pageItems = allEpisodes.slice(start, start + SHOW_PAGE_SIZE);
 
   return {
     episodes: pageItems,
     show,
-    hasMore,
-    searchExhausted: globalPage > MAX_LOOKUP_PAGES,
+    hasMore: allEpisodes.length > start + SHOW_PAGE_SIZE,
+    searchExhausted: false,
   };
 }
 
@@ -126,36 +133,27 @@ export interface EpisodeLookupResult {
   searchExhausted: boolean;
 }
 
-/**
- * Finds one episode by show slug + episode slug, by paging through the
- * listing until a match turns up - there's no dedicated single-episode
- * endpoint on this backend.
- */
+/** One episode by show slug + episode slug - GET /podcasts/{slug}/episodes/{episodeSlug}. */
 export async function getPodcastEpisodeBySlug(
   showSlug: string,
   episodeSlug: string
 ): Promise<EpisodeLookupResult> {
-  for (let page = 1; page <= MAX_LOOKUP_PAGES; page++) {
-    const { episodes, hasMore } = await getPodcastEpisodes(page);
-
-    const match = episodes.find((ep) => ep.show.slug === showSlug && ep.slug === episodeSlug);
-    if (match) {
-      return { episode: match, searchExhausted: false };
-    }
-    if (!hasMore) {
+  try {
+    const data = await apiGet<{ series: PodcastSeriesRaw; episode: PodcastEpisodeRaw }>(
+      `/${encodeURIComponent(showSlug)}/episodes/${encodeURIComponent(episodeSlug)}`
+    );
+    return { episode: toEpisode(data.episode, toShow(data.series)), searchExhausted: false };
+  } catch (err) {
+    if (err instanceof PodcastApiError) {
       return { episode: null, searchExhausted: false };
     }
+    throw err;
   }
-  return { episode: null, searchExhausted: true };
 }
 
-/** Derives the distinct list of shows present across a set of episodes. */
-export function extractShowsFromEpisodes(episodes: PodcastEpisode[]) {
-  const seen = new Map<string, PodcastEpisode['show']>();
-  for (const ep of episodes) {
-    if (!seen.has(ep.show.id)) {
-      seen.set(ep.show.id, ep.show);
-    }
-  }
-  return Array.from(seen.values());
+/** Every published show - GET /podcasts. A real listing now, not a
+ * derived guess from scanning recent episodes. */
+export async function fetchPodcastShowList(): Promise<PodcastShow[]> {
+  const data = await apiGet<{ series: PodcastSeriesRaw[] }>('');
+  return data.series.map(toShow);
 }

@@ -46,9 +46,13 @@ interface UserState {
   setHasHydrated: (value: boolean) => void;
 }
 
-// Points/premium status have no backend yet - kept as cosmetic, locally
-// fabricated values (not written back to the server) so existing Profile/
-// Raffle UI referencing them doesn't need to change in this pass.
+// Points have no backend yet - kept as a cosmetic, locally fabricated
+// value (not written back to the server) so existing Profile/Raffle UI
+// referencing it doesn't need to change in this pass. Unlike the former
+// isPremium flag (removed - it labeled every account "Premium Member"
+// with no purchase, backend field, or gated feature behind it, which
+// read to App Review as undisclosed paid content), points are never
+// described to the user as anything purchasable.
 const INITIAL_POINTS = 2450;
 const SIGNUP_BONUS_POINTS = 1000;
 
@@ -60,7 +64,6 @@ function toUserInfo(result: AuthResult, points: number): UserInfo {
     phone: result.user.phone,
     token: result.token,
     points,
-    isPremium: true,
     registeredAt: new Date().toISOString(),
     bookmarkedArticleIds: [],
   };

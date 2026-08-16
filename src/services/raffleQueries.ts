@@ -1,10 +1,13 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchActiveRaffles,
   fetchMyRaffleEntries,
-  initiateRafflePayment,
-  previewRaffleAmount,
-  verifyRafflePayment,
+  fetchSupportedCurrencies,
+  enterRaffleFree,
+  enterRafflePaid,
+  initiateCheckout,
+  verifyPayment,
+  previewAmount,
 } from './raffleApi';
 
 const STALE_TIME = 60 * 1000; // 1 min - entry counts change as people pay
@@ -26,30 +29,60 @@ export function useMyRaffleEntries(token: string | null) {
   });
 }
 
-export function useRafflePreviewAmount(token: string | null, raffleId: number | null, currency: string) {
+export function useEnterRaffleFree() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { slug: string; token?: string | null; guestToken?: string }) =>
+      enterRaffleFree(vars.slug, vars.token, vars.guestToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['raffles', 'my-entries'] });
+    },
+  });
+}
+
+export function useEnterRafflePaid() {
+  return useMutation({
+    mutationFn: (vars: {
+      slug: string;
+      ticketCount: number;
+      token?: string | null;
+      guestToken?: string;
+      currency?: string;
+    }) => enterRafflePaid(vars.slug, vars.ticketCount, vars.token, vars.guestToken, vars.currency),
+  });
+}
+
+export function useSupportedCurrencies() {
   return useQuery({
-    queryKey: ['raffles', 'preview-amount', raffleId, currency],
-    queryFn: () => previewRaffleAmount(token as string, raffleId as number, currency),
-    enabled: Boolean(token) && Boolean(raffleId),
+    queryKey: ['raffles', 'currencies'],
+    queryFn: fetchSupportedCurrencies,
+    staleTime: Infinity, // static config, doesn't change during a session
+  });
+}
+
+export function usePreviewAmount(slug: string | null, currency: string | null, ticketCount: number) {
+  return useQuery({
+    queryKey: ['raffles', 'preview-amount', slug, currency, ticketCount],
+    queryFn: () => previewAmount(slug as string, currency as string, ticketCount),
+    enabled: Boolean(slug) && Boolean(currency),
     staleTime: STALE_TIME,
   });
 }
 
-export function useInitiateRafflePayment() {
+export function useInitiateCheckout() {
   return useMutation({
-    mutationFn: (vars: {
-      token: string;
-      raffleId: number;
-      raffleNumber: string;
-      phone: string;
-      deviceId: string;
-      currency: string;
-    }) => initiateRafflePayment(vars.token, vars.raffleId, vars.raffleNumber, vars.phone, vars.deviceId, vars.currency),
+    mutationFn: (vars: { invoiceNumber: string; redirectUrl: string; token?: string | null; email?: string; name?: string }) =>
+      initiateCheckout(vars.invoiceNumber, vars.redirectUrl, vars.token, vars.email, vars.name),
   });
 }
 
-export function useVerifyRafflePayment() {
+export function useVerifyPayment() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { token: string; txRef: string }) => verifyRafflePayment(vars.token, vars.txRef),
+    mutationFn: (vars: { reference: string }) => verifyPayment(vars.reference),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['raffles', 'my-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['raffles', 'active'] });
+    },
   });
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,16 +9,15 @@ import { COLORS, RADIUS, SPACING } from '../theme/colors';
 export function MiniPlayer() {
   const navigation = useNavigation<any>();
   const { playbackState, nowPlaying, togglePlayPause, playLive, reconnectFailed } = useRadioStore();
+  // MiniPlayer renders below the tab bar (see RootNavigator's MainTabs),
+  // so it - not the tab bar - is the screen's true bottom edge, and needs
+  // its own safe-area clearance for the home indicator / gesture nav bar.
   const insets = useSafeAreaInsets();
-  // The mini-player sits below the tab bar, outside the area React Navigation
-  // insets for automatically, so on Android it needs its own bottom padding
-  // or the gesture/3-button nav bar overlaps and swallows taps on it.
-  const navBarPadding = Platform.OS === 'android' ? insets.bottom : 0;
 
   if (!nowPlaying && playbackState === 'stopped') {
     // Collapsed state: a slim "Listen Live" prompt instead of an empty bar
     return (
-      <Pressable style={[styles.collapsedBar, { paddingBottom: 8 + navBarPadding }]} onPress={playLive}>
+      <Pressable style={[styles.collapsedBar, { paddingBottom: 10 + insets.bottom }]} onPress={playLive}>
         <Ionicons name="radio" size={20} color={COLORS.secondary} />
         <Text style={styles.collapsedText}>Tap to listen live</Text>
       </Pressable>
@@ -27,7 +26,7 @@ export function MiniPlayer() {
 
   return (
     <Pressable
-      style={[styles.bar, { paddingBottom: 10 + navBarPadding }]}
+      style={[styles.bar, { paddingBottom: 10 + insets.bottom }]}
       onPress={() => navigation.navigate('NowPlaying')}
     >
       <View style={styles.liveDot} />
@@ -77,8 +76,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 3,
     backgroundColor: COLORS.surfaceContainer,
-    paddingVertical: 0,
-    marginBottom: 8
+    paddingTop: 10,
   },
   collapsedText: {
     color: COLORS.secondary,
@@ -90,7 +88,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
     backgroundColor: COLORS.secondaryContainer,
-    paddingVertical: 10,
+    paddingTop: 10,
     paddingHorizontal: SPACING.md,
   },
   liveDot: {

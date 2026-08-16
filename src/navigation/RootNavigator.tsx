@@ -9,21 +9,26 @@ import { useUserStore } from '../store/userStore';
 import { useRadioStore } from '../store/radioStore';
 import { COLORS } from '../theme/colors';
 import { MiniPlayer } from '../components/MiniPlayer';
+import { navigationRef } from './navigationRef';
 
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import NewsScreen from '../screens/NewsScreen';
 import DiscoverScreen from '../screens/DiscoverScreen';
-import RaffleScreen from '../screens/RaffleScreen';
+import RaffleScreen from '../screens/engagements/RaffleScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import PodcastStackNavigator from './PodcastStackNavigator';
 import NowPlayingScreen from '../screens/NowPlayingScreen';
-import RafflePaymentScreen from '../screens/RafflePaymentScreen';
+import RafflePaymentScreen from '../screens/engagements/RafflePaymentScreen';
 import PasswordResetScreen from '../screens/PasswordResetScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ConfirmResetPinScreen from '../screens/ConfirmResetPinScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import YoutubeVideoScreen from '../screens/YoutubeVideoScreen';
+import PredictionsScreen from '../screens/engagements/PredictionsScreen';
+import LeaderboardScreen from '../screens/engagements/LeaderboardScreen';
+import QuizzesScreen from '../screens/engagements/QuizzesScreen';
+import EngagementScreen from '../screens/EngagementScreen';
 
 const AuthStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
@@ -33,7 +38,7 @@ const TAB_ICONS: Record<string, string> = {
   News: 'newspaper',
   Discover: 'compass',
   Podcast: 'radio',
-  Raffles: 'pricetag',
+  Arena: 'trophy',
   Profile: 'person',
 };
 
@@ -45,7 +50,15 @@ function MainTabs() {
           headerShown: false,
           tabBarActiveTintColor: COLORS.secondary,
           tabBarInactiveTintColor: COLORS.onSurfaceVariant,
-          tabBarStyle: { backgroundColor: COLORS.surfaceContainer, borderTopColor: COLORS.outlineVariant },
+          // Explicit height, no extra bottom inset - React Navigation's
+          // default height auto-adds the safe-area bottom inset (~34pt on
+          // notched devices) assuming the tab bar is the screen's true
+          // bottom edge. It isn't here: MiniPlayer renders below it (see
+          // MainTabs), so that auto-added inset was just dead space
+          // between the tab icons and MiniPlayer. MiniPlayer now owns its
+          // own safe-area padding instead, since it's the actual last
+          // thing before the home indicator.
+          tabBarStyle: { backgroundColor: COLORS.surfaceContainer, borderTopColor: COLORS.outlineVariant, height: 54 },
           tabBarIcon: ({ color, size }) => (
             <Ionicons name={TAB_ICONS[route.name]} size={size} color={color} />
           ),
@@ -54,7 +67,7 @@ function MainTabs() {
         <Tab.Screen name="News" component={NewsScreen} />
         <Tab.Screen name="Discover" component={DiscoverScreen} />
         <Tab.Screen name="Podcast" component={PodcastStackNavigator} />
-        <Tab.Screen name="Raffles" component={RaffleScreen} />
+        <Tab.Screen name="Arena" component={EngagementScreen} />
         <Tab.Screen name="Profile" component={ProfileScreen} />
       </Tab.Navigator>
       {/* Persistent mini-player sits above the tab bar */}
@@ -102,7 +115,7 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         {/* Guests land here directly - News/Discover/Listen are open, Raffles/Profile gate individually */}
         <RootStack.Screen name="Main" component={MainTabs} />
@@ -131,6 +144,10 @@ export default function RootNavigator() {
           component={YoutubeVideoScreen}
           options={{ presentation: 'modal' }}
         />
+        <RootStack.Screen name="Raffle" component={RaffleScreen} />
+        <RootStack.Screen name="Predictions" component={PredictionsScreen} />
+        <RootStack.Screen name="Leaderboard" component={LeaderboardScreen} />
+        <RootStack.Screen name="Quizzes" component={QuizzesScreen} />
       </RootStack.Navigator>
     </NavigationContainer>
   );
