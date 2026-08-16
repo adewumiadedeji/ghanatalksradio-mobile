@@ -26,7 +26,7 @@ export function MiniPlayer() {
 
   return (
     <Pressable
-      style={[styles.bar, { paddingBottom: 10 + insets.bottom }]}
+      style={[styles.bar, { paddingBottom: 0 + insets.bottom }]}
       onPress={() => navigation.navigate('NowPlaying')}
     >
       <View style={styles.liveDot} />
