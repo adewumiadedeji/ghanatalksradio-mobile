@@ -122,13 +122,19 @@ async function apiPost<T>(path: string, body: Record<string, unknown>, token?: s
   return json.data as T;
 }
 
-/** Sends this device's platform so the backend only returns raffles
- * staff made available on it (or 'everywhere' ones) - see
- * PublicRaffleController::index()'s docblock. Android/iOS only; the
- * website's equivalent client deliberately never sends this param, so
- * it always sees every active raffle regardless of platform. */
+/** This device's platform, sent so the backend can enforce a raffle's
+ * platform_availability - on the list (which raffle staff made available
+ * here) and, since PublicRaffleController::isAvailableOnPlatform(), on
+ * show()/enter() too (so a raffle hidden from this platform's list can't
+ * be entered anyway via a known/guessed slug). Android/iOS only; the
+ * website's equivalent client deliberately never sends this, so it
+ * always sees and can enter every active raffle regardless of platform. */
+function currentPlatform(): string {
+  return Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : '';
+}
+
 export async function fetchActiveRaffles(): Promise<RaffleDto[]> {
-  const platform = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : '';
+  const platform = currentPlatform();
   const query = platform ? `?platform=${platform}` : '';
   const data = await apiGet<{ raffles: RaffleDto[] }>(`/raffles${query}`);
   return data.raffles;
@@ -141,7 +147,7 @@ export async function enterRaffleFree(
 ): Promise<{ id: number; ticket_count: number }> {
   const data = await apiPost<{ entry: { id: number; ticket_count: number } }>(
     `/raffles/${encodeURIComponent(slug)}/enter`,
-    { entry_method: 'free', guest_token: token ? undefined : guestToken },
+    { entry_method: 'free', guest_token: token ? undefined : guestToken, platform: currentPlatform() },
     token
   );
   return data.entry;
@@ -162,7 +168,13 @@ export async function enterRafflePaid(
 ): Promise<RaffleEntryResult> {
   return apiPost<RaffleEntryResult>(
     `/raffles/${encodeURIComponent(slug)}/enter`,
-    { entry_method: 'paid', ticket_count: ticketCount, currency, guest_token: token ? undefined : guestToken },
+    {
+      entry_method: 'paid',
+      ticket_count: ticketCount,
+      currency,
+      guest_token: token ? undefined : guestToken,
+      platform: currentPlatform(),
+    },
     token
   );
 }
