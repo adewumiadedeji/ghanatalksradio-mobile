@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, StyleSheet, SafeAreaView, Pressable, Alert, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList, StyleSheet, SafeAreaView, Pressable, Alert, ActivityIndicator, Switch } from 'react-native';
 import { COLORS, SPACING, RADIUS } from '../theme/colors';
 import { SecondaryButton } from '../components/UI';
 import { GuestGate } from '../components/GuestGate';
@@ -7,6 +7,7 @@ import { ArticleDetailModal } from '../components/ArticleDetailModal';
 import { useUserStore } from '../store/userStore';
 import { useBookmarkedArticles } from '../services/queries';
 import { useMyRaffleEntries } from '../services/raffleQueries';
+import { isPromotionsEnabled, setPromotionsEnabled } from '../services/pushNotifications';
 import { Article } from '../types';
 
 export default function ProfileScreen({ navigation }: any) {
@@ -26,6 +27,27 @@ export default function ProfileScreen({ navigation }: any) {
   // no WordPress likes/comments endpoint to persist them to.
   const [localLikes, setLocalLikes] = useState<Record<string, number>>({});
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // Device-level FCM topic preference, not account data - see
+  // pushNotifications.ts's docblock. Starts true (matches the default
+  // subscribed-until-opted-out behavior) and is corrected from
+  // AsyncStorage once read, avoiding a flash of the wrong state on a
+  // device that already opted out.
+  const [promotionsEnabled, setPromotionsEnabledState] = useState(true);
+
+  useEffect(() => {
+    isPromotionsEnabled().then(setPromotionsEnabledState);
+  }, []);
+
+  const handleTogglePromotions = (value: boolean) => {
+    setPromotionsEnabledState(value);
+    setPromotionsEnabled(value).catch(() => {
+      // Revert the switch if the AsyncStorage write itself failed (the
+      // topic (un)subscribe call already fails soft on its own - see
+      // setPromotionsEnabled).
+      setPromotionsEnabledState(!value);
+    });
+  };
 
   if (!user) {
     return (
@@ -122,6 +144,23 @@ export default function ProfileScreen({ navigation }: any) {
               />
             </View>
 
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsLabel}>Promotional notifications</Text>
+                  <Text style={styles.settingsHint}>
+                    Occasional pushes from advertisers. Turning this off won't affect live-show
+                    alerts.
+                  </Text>
+                </View>
+                <Switch
+                  value={promotionsEnabled}
+                  onValueChange={handleTogglePromotions}
+                  trackColor={{ false: COLORS.outlineVariant, true: COLORS.secondary }}
+                />
+              </View>
+            </View>
+
             <Text style={styles.sectionTitle}>Saved Articles</Text>
           </View>
         }
@@ -191,6 +230,16 @@ const styles = StyleSheet.create({
   statBox: { alignItems: 'center' },
   statValue: { fontSize: 20, fontWeight: '700', color: COLORS.onSurface },
   statLabel: { fontSize: 12, color: COLORS.onSurfaceVariant },
+  settingsCard: {
+    backgroundColor: COLORS.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+  },
+  settingsRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  settingsLabel: { fontSize: 15, fontWeight: '600', color: COLORS.onSurface },
+  settingsHint: { fontSize: 12, color: COLORS.onSurfaceVariant, marginTop: 2 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: COLORS.onSurface },
   bookmarkCard: {
     backgroundColor: COLORS.surfaceContainerLowest,

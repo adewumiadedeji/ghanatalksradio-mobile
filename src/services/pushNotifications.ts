@@ -1,16 +1,56 @@
-import { Platform, PermissionsAndroid, Alert } from 'react-native';
+import { Platform, PermissionsAndroid, Alert, Linking } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigateWhenReady } from '../navigation/navigationRef';
 
 /**
- * Push notifications for "studio goes live" - see the backend's
+ * Push notifications for "studio goes live" AND advertiser promotions -
+ * see the backend's
  * Modules/Notification/app/Application/PushNotificationService.php
  * docblock for the full picture. Uses FCM topic messaging: every device
- * subscribes itself to the "studio-live" topic locally (no backend
- * registration/device-token database involved at all), so Go Live on
- * the admin side is just one send to that topic.
+ * subscribes itself to these topics locally (no backend registration/
+ * device-token database involved at all), so sending on the admin side
+ * is just one send to the relevant topic.
+ *
+ * Two separate topics on purpose: "studio-live" is always on (there's no
+ * UI to turn it off), "promotions" is a distinct opt-out toggle (see
+ * isPromotionsEnabled/setPromotionsEnabled, surfaced in ProfileScreen) -
+ * a listener who mutes advertiser pushes should never lose live-show
+ * alerts in the process.
  */
 const STUDIO_LIVE_TOPIC = 'studio-live';
+const PROMOTIONS_TOPIC = 'promotions';
+
+// Absent key = never toggled = subscribed by default, matching
+// studio-live's existing always-on behavior until the user actively
+// opts out.
+const PROMOTIONS_PREFERENCE_KEY = 'gtr_promotions_notifications_enabled_v1';
+
+export async function isPromotionsEnabled(): Promise<boolean> {
+  const raw = await AsyncStorage.getItem(PROMOTIONS_PREFERENCE_KEY);
+  return raw === null ? true : raw === '1';
+}
+
+/**
+ * Called from ProfileScreen's toggle. Persists the choice first (so the
+ * preference survives even if the topic call itself fails) then updates
+ * the live FCM subscription to match - fails soft, same posture as
+ * initPushNotifications below, since a failed unsubscribe shouldn't
+ * block the rest of the settings screen.
+ */
+export async function setPromotionsEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(PROMOTIONS_PREFERENCE_KEY, enabled ? '1' : '0');
+
+  try {
+    if (enabled) {
+      await messaging().subscribeToTopic(PROMOTIONS_TOPIC);
+    } else {
+      await messaging().unsubscribeFromTopic(PROMOTIONS_TOPIC);
+    }
+  } catch (err) {
+    console.warn('setPromotionsEnabled: topic (un)subscribe failed', err);
+  }
+}
 
 async function ensurePermission(): Promise<boolean> {
   if (Platform.OS === 'android') {
@@ -36,6 +76,28 @@ async function ensurePermission(): Promise<boolean> {
 
 function goToNowPlaying() {
   navigateWhenReady('NowPlaying');
+}
+
+/**
+ * Routes a tapped/opened notification based on `data.type`, which both
+ * PushNotificationService methods set (`studio_live` / `promotion` - see
+ * that class's docblock). A promotion opens its deep_link_url (the ad
+ * creative's cta_url) via the OS, not in-app navigation - the target is
+ * advertiser-controlled and not necessarily a screen this app knows
+ * about (could be an external site). Falls back to NowPlaying for any
+ * unrecognized/missing type, matching this function's pre-promotions
+ * behavior exactly.
+ */
+function handleNotificationTap(data: Record<string, string> | undefined) {
+  if (data?.type === 'promotion') {
+    const url = data.deep_link_url;
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+    }
+    return;
+  }
+
+  goToNowPlaying();
 }
 
 /**
@@ -66,6 +128,14 @@ export async function initPushNotifications() {
       // subscribes successfully without a full app restart.
     }
 
+    try {
+      if (await isPromotionsEnabled()) {
+        await messaging().subscribeToTopic(PROMOTIONS_TOPIC);
+      }
+    } catch (err) {
+      console.warn('initPushNotifications: promotions subscribeToTopic failed', err);
+    }
+
     // Foreground: FCM doesn't show a system notification while the app is
     // open (that's standard OS behavior, not a bug) - this is the one
     // place we're responsible for surfacing it ourselves. A plain Alert
@@ -74,6 +144,18 @@ export async function initPushNotifications() {
     messaging().onMessage(async (remoteMessage) => {
       const title = remoteMessage.notification?.title ?? 'GhanaTalksRadio';
       const body = remoteMessage.notification?.body ?? '';
+      const data = remoteMessage.data as Record<string, string> | undefined;
+
+      if (data?.type === 'promotion') {
+        const url = data.deep_link_url;
+        Alert.alert(
+          title,
+          body,
+          url ? [{ text: 'Not now', style: 'cancel' }, { text: 'View', onPress: () => Linking.openURL(url).catch(() => {}) }] : [{ text: 'OK' }]
+        );
+        return;
+      }
+
       Alert.alert(title, body, [
         { text: 'Not now', style: 'cancel' },
         { text: 'Listen', onPress: goToNowPlaying },
@@ -82,14 +164,14 @@ export async function initPushNotifications() {
 
     // Background -> foreground: user tapped the OS notification while the
     // app was already running in the background.
-    messaging().onNotificationOpenedApp(() => {
-      goToNowPlaying();
+    messaging().onNotificationOpenedApp((remoteMessage) => {
+      handleNotificationTap(remoteMessage.data as Record<string, string> | undefined);
     });
 
     // Killed -> foreground: app was launched by tapping the notification.
     const initialNotification = await messaging().getInitialNotification();
     if (initialNotification) {
-      goToNowPlaying();
+      handleNotificationTap(initialNotification.data as Record<string, string> | undefined);
     }
   } catch (err) {
     console.warn('initPushNotifications: setup failed', err);

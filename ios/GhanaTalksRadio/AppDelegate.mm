@@ -1,6 +1,7 @@
 #import "AppDelegate.h"
 
 #import <React/RCTBundleURLProvider.h>
+#import <React/RCTLinkingManager.h>
 #import <Firebase.h>
 
 @implementation AppDelegate
@@ -25,6 +26,15 @@
   self.initialProps = @{};
 
   return [super application:application didFinishLaunchingWithOptions:launchOptions];
+}
+
+// Universal Links land here (see GhanaTalksRadio.entitlements' associated
+// domains) - forwards the tapped ghanatalksradio.com URL into React
+// Native's Linking module so Linking.getInitialURL()/'url' event fire,
+// same as they would for a custom-scheme link.
+- (BOOL)application:(UIApplication *)application continueUserActivity:(NSUserActivity *)userActivity restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> *_Nullable))restorationHandler
+{
+  return [RCTLinkingManager application:application continueUserActivity:userActivity restorationHandler:restorationHandler];
 }
 
 - (NSURL *)sourceURLForBridge:(RCTBridge *)bridge

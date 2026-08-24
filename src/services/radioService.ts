@@ -1,3 +1,4 @@
+import { Image, Platform } from 'react-native';
 import TrackPlayer, {
   AppKilledPlaybackBehavior,
   Capability,
@@ -9,12 +10,20 @@ import { LIVE_STREAM_URL } from './api';
 import { getSessionStatus, resolveStreamMount, startListeningSession, stopListeningSession } from './streamingApi';
 import { useUserStore } from '../store/userStore';
 import { resolveListenerLocation } from '../utils/geolocation';
+import { getDeviceId } from '../utils/deviceId';
+
+// Fallback OS lock-screen/Control Center artwork for the live stream when
+// the on-air presenter hasn't uploaded their own photo (Admin > Broadcast
+// > Presenters) - `updateNowPlayingMetadata()`/TrackPlayer.add() both need
+// a URI string, not a bundled-asset require() number, so this is resolved
+// once at module load via Image.resolveAssetSource() rather than on every
+// call.
+const STATION_LOGO_URI = Image.resolveAssetSource(require('../assets/images/station-logo.png')).uri;
 
 let isSetup = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 3000;
-const SEEK_INTERVAL_SECONDS = 15;
 
 // Set once startListeningSession() resolves (best-effort, never blocks
 // playback - see playLiveStream()). Passed to stopListeningSession() when
@@ -92,17 +101,24 @@ export async function setupPlayer() {
     // android: {
     //   appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
     // },
+    // SkipToNext/SkipToPrevious (not JumpForward/JumpBackward) so the OS
+    // lock-screen/Control Center widget shows prev/pause/next like a
+    // polished media app, not skip-15 buttons - the in-app NowPlayingScreen
+    // has its own dedicated 15s seek buttons wired straight to seekBy(),
+    // entirely independent of these OS-widget capabilities, so nothing is
+    // actually lost by dropping Jump* here. Next/Previous have no real
+    // "track" to move to (one continuous live stream, one episode at a
+    // time - no queue), so they're registered as safe no-ops below purely
+    // for OS-widget visual parity, not real navigation.
     capabilities: [
       Capability.Play,
       Capability.Pause,
       Capability.Stop,
       Capability.SeekTo,
-      Capability.JumpForward,
-      Capability.JumpBackward,
+      Capability.SkipToNext,
+      Capability.SkipToPrevious,
     ],
     compactCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
-    forwardJumpInterval: SEEK_INTERVAL_SECONDS,
-    backwardJumpInterval: SEEK_INTERVAL_SECONDS,
     android: {
       // Pause outright (rather than just ducking the volume) on any focus
       // interruption, matching what a live radio listener expects when
@@ -111,7 +127,29 @@ export async function setupPlayer() {
     },
   });
   await TrackPlayer.setRepeatMode(RepeatMode.Off);
+  // See the capabilities comment above - these exist purely so the OS
+  // widget's prev/next buttons are enabled and tappable without erroring,
+  // not because they do anything yet.
+  TrackPlayer.addEventListener(Event.RemoteNext, () => {});
+  TrackPlayer.addEventListener(Event.RemotePrevious, () => {});
   isSetup = true;
+}
+
+/**
+ * Pushes fresh title/artist/artwork onto the OS lock-screen/Control Center
+ * widget for whatever's currently loaded, without touching playback - used
+ * by radioStore's now-playing poll so the widget reflects the real on-air
+ * programme instead of staying stuck on the generic title set when
+ * playLiveStream() first called TrackPlayer.add(). `photoUrl` is the
+ * presenter's own uploaded photo (Admin > Broadcast > Presenters,
+ * `presenter_photo_url` on the now-playing API) - falls back to the
+ * bundled station logo when the presenter hasn't uploaded one, same as
+ * playLiveStream()'s own initial artwork.
+ */
+export async function updateLiveNowPlayingMetadata(title: string, artist: string, photoUrl?: string | null) {
+  const currentTrack = await TrackPlayer.getActiveTrack();
+  if (currentTrack?.id !== 'live-stream') return;
+  await TrackPlayer.updateNowPlayingMetadata({ title, artist, artwork: photoUrl || STATION_LOGO_URI });
 }
 
 export async function playLiveStream() {
@@ -139,6 +177,7 @@ export async function playLiveStream() {
     url: streamUrl,
     title: 'GhanaTalksRadio — Live',
     artist: 'Live Broadcast',
+    artwork: STATION_LOGO_URI,
     isLiveStream: true,
   });
   await TrackPlayer.play();
@@ -154,18 +193,22 @@ export async function playLiveStream() {
   // timeout just means the session is recorded without country/region,
   // same as before this existed.
   const userToken = useUserStore.getState().user?.token ?? null;
-  resolveListenerLocation()
-    .then((location) =>
+  Promise.all([resolveListenerLocation(), getDeviceId()])
+    .then(([location, deviceId]) =>
       startListeningSession(
-        location
-          ? {
-              latitude: location.latitude,
-              longitude: location.longitude,
-              country: location.country ?? undefined,
-              region: location.region ?? undefined,
-              city: location.city ?? undefined,
-            }
-          : {},
+        {
+          ...(location
+            ? {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                country: location.country ?? undefined,
+                region: location.region ?? undefined,
+                city: location.city ?? undefined,
+              }
+            : {}),
+          deviceId,
+          os: Platform.OS,
+        },
         userToken
       )
     )
@@ -178,14 +221,26 @@ export async function playLiveStream() {
     });
 }
 
-export async function playEpisode(episode: { id: string | number; title: string; url: string }) {
+export async function playEpisode(episode: {
+  id: string | number;
+  title: string;
+  url: string;
+  /** The show/series name, e.g. "GhanaTalksRadio Podcast" - falls back to
+   * that generic label only if the episode's own show has none. */
+  artist?: string | null;
+  /** Real, fully-resolved episode/show cover image URL (see PodcastShow's
+   * own docblock) - shown as the OS widget's artwork, matching a real
+   * podcast app's lock-screen appearance instead of a blank placeholder. */
+  artwork?: string | null;
+}) {
   await setupPlayer();
   await TrackPlayer.reset();
   await TrackPlayer.add({
     id: `episode-${episode.id}`,
     url: episode.url,
     title: episode.title,
-    artist: 'GhanaTalksRadio Podcast',
+    artist: episode.artist || 'GhanaTalksRadio Podcast',
+    artwork: episode.artwork || undefined,
   });
   await TrackPlayer.play();
 }

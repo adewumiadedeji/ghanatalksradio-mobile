@@ -14,6 +14,7 @@ import {
   registerKickWatcher,
   seekTo as seekToService,
   seekBy as seekByService,
+  updateLiveNowPlayingMetadata,
 } from '../services/radioService';
 import { getNowPlaying } from '../services/streamingApi';
 
@@ -133,14 +134,21 @@ export const useRadioStore = create<RadioState>((set, get) => ({
           // after the listener switched to a podcast episode shouldn't
           // clobber that episode's metadata.
           if (!get().nowPlaying?.isLive) return;
+          const title = programme?.name ?? 'Live Broadcast';
+          const subtitle = programme?.presenter ?? 'GhanaTalksRadio';
           set({
             nowPlaying: {
               id: 'live-stream',
-              title: programme?.name ?? 'Live Broadcast',
-              subtitle: programme?.presenter ?? 'GhanaTalksRadio',
+              title,
+              subtitle,
               isLive: true,
             },
           });
+          // Reflects the real on-air programme on the OS lock-screen/Control
+          // Center widget too, not just the in-app UI - without this the
+          // widget stays stuck on the generic title playLiveStream() sets
+          // when playback first starts.
+          updateLiveNowPlayingMetadata(title, subtitle, programme?.presenter_photo_url);
         } catch {
           // keep whatever's currently shown
         }
@@ -159,7 +167,13 @@ export const useRadioStore = create<RadioState>((set, get) => ({
     stopNowPlayingPoll();
     set({ playbackState: 'loading', reconnectFailed: false });
     try {
-      await playEpisodeService({ id: episode.id, title: episode.title, url: episode.audioUrl });
+      await playEpisodeService({
+        id: episode.id,
+        title: episode.title,
+        url: episode.audioUrl,
+        artist: episode.show.name,
+        artwork: episode.show.imageUrl,
+      });
       set({
         nowPlaying: {
           id: `episode-${episode.id}`,

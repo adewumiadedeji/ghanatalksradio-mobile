@@ -40,6 +40,20 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
+        <!-- App Links: autoVerify makes Android check
+             https://ghanatalksradio.com/.well-known/assetlinks.json against
+             this app's package name + signing cert on install. Once
+             verified, tapping any ghanatalksradio.com link (WhatsApp share,
+             search result, QR code) opens straight into this activity
+             instead of the browser; unverified/uninstalled falls through to
+             the website automatically - no custom scheme needed. -->
+        <intent-filter android:autoVerify="true">
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" android:host="ghanatalksradio.com" />
+            <data android:scheme="https" android:host="www.ghanatalksradio.com" />
+        </intent-filter>
       </activity>
       <!-- react-native-track-player's background playback service. Must be
            exported=true (matching the library's own manifest) so the

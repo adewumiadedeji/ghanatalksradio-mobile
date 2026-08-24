@@ -2,6 +2,16 @@
  * @format
  */
 
+// Must be the very first import, before anything that might transitively
+// import 'uuid' (see utils/deviceId.ts) - react-native-get-random-values
+// patches the global crypto.getRandomValues() that uuid's v4() needs and
+// that React Native doesn't provide natively. Imported after the thing
+// that needs it, or not at all, means uuidv4() throws synchronously,
+// which turns getDeviceId() into a rejected promise and silently kills
+// the whole startListeningSession() call in radioService.ts (swallowed by
+// its own .catch()) - a listener plays the stream fine but never shows up
+// in the admin's Live Listeners page, with no visible error anywhere.
+import 'react-native-get-random-values';
 import {AppRegistry} from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import TrackPlayer from 'react-native-track-player';

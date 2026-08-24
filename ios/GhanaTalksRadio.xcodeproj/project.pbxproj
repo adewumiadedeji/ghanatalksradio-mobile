@@ -40,6 +40,7 @@
 		13B07FB71A68108700A75B9A /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = main.m; path = GhanaTalksRadio/main.m; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = GhanaTalksRadio/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3CCF267EB789132D9DE2E560 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "GhanaTalksRadio/GoogleService-Info.plist"; sourceTree = "<group>"; };
+		6C947604B9712049AE8F6ADB /* GhanaTalksRadio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = GhanaTalksRadio.entitlements; path = GhanaTalksRadio/GhanaTalksRadio.entitlements; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = GhanaTalksRadio/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		88DE86BA4251D3C4731B24D0 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = GhanaTalksRadio/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A05734443670D97C7B2021F7 /* Pods-GhanaTalksRadio-GhanaTalksRadioTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GhanaTalksRadio-GhanaTalksRadioTests.release.xcconfig"; path = "Target Support Files/Pods-GhanaTalksRadio-GhanaTalksRadioTests/Pods-GhanaTalksRadio-GhanaTalksRadioTests.release.xcconfig"; sourceTree = "<group>"; };
@@ -93,6 +94,7 @@
 			children = (
 				13B07FAF1A68108700A75B9A /* AppDelegate.h */,
 				13B07FB01A68108700A75B9A /* AppDelegate.mm */,
+				6C947604B9712049AE8F6ADB /* GhanaTalksRadio.entitlements */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				3CCF267EB789132D9DE2E560 /* GoogleService-Info.plist */,
@@ -504,6 +506,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = GhanaTalksRadio/GhanaTalksRadio.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 64W2GCNX57;
 				ENABLE_BITCODE = NO;
@@ -513,7 +516,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1.7;
+				MARKETING_VERSION = 2.1.8;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -535,6 +538,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = GhanaTalksRadio/GhanaTalksRadio.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 64W2GCNX57;
 				INFOPLIST_FILE = GhanaTalksRadio/Info.plist;
@@ -543,7 +547,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1.7;
+				MARKETING_VERSION = 2.1.8;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

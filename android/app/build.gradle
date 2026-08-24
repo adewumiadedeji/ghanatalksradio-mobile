@@ -90,8 +90,8 @@ android {
         applicationId "com.ghanatalksradio"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 57
-        versionName "1.5.26"
+        versionCode 59
+        versionName "1.5.28"
     }
     signingConfigs {
         debug {

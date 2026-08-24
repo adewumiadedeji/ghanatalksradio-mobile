@@ -96,6 +96,15 @@ export interface StartSessionParams {
   city?: string;
   latitude?: number;
   longitude?: number;
+  /** Persistent per-device id from utils/deviceId.ts - lets the backend's
+   * closeDanglingSessions() tell a real reconnect apart from a different
+   * device on the same shared IP (see that method's docblock). */
+  deviceId?: string;
+  /** React Native's Platform.OS ('ios'/'android') - the backend can't
+   * meaningfully sniff this from the mobile UA (see PublicListenController::
+   * detectClient()'s docblock), so it's sent explicitly for the admin's
+   * Live Listeners OS column. */
+  os?: string;
 }
 
 /** Registers a listening session server-side. Returns a session_token that
@@ -106,9 +115,10 @@ export interface StartSessionParams {
  * the same way EnsureAccountAuthenticated does, via the Authorization
  * header only (no query-param fallback like the legacy CI backend). */
 export async function startListeningSession(params: StartSessionParams = {}, token?: string | null): Promise<string> {
+  const { deviceId, ...rest } = params;
   const data = await callApi<{ session_token: string }>('/api/listen/start', {
     method: 'POST',
-    body: JSON.stringify({ platform: 'mobile', ...params }),
+    body: JSON.stringify({ platform: 'mobile', device_id: deviceId, ...rest }),
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   return data.session_token;
@@ -140,6 +150,10 @@ export interface NowPlayingProgramme {
   name: string;
   description: string | null;
   presenter: string | null;
+  /** Null when the presenter hasn't uploaded a photo (Admin > Broadcast >
+   * Presenters) - callers should fall back to the bundled station logo,
+   * not leave the now-playing widget with no artwork at all. */
+  presenter_photo_url: string | null;
   day_of_week: string | null;
   start_time: string;
   end_time: string;
