@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, SafeAreaView, Pressable, Alert, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, FlatList, StyleSheet, SafeAreaView, Pressable, Alert, ActivityIndicator, Switch, Linking } from 'react-native';
 import { COLORS, SPACING, RADIUS } from '../theme/colors';
 import { SecondaryButton } from '../components/UI';
 import { GuestGate } from '../components/GuestGate';
@@ -9,6 +9,17 @@ import { useBookmarkedArticles } from '../services/queries';
 import { useMyRaffleEntries } from '../services/raffleQueries';
 import { isPromotionsEnabled, setPromotionsEnabled } from '../services/pushNotifications';
 import { Article } from '../types';
+
+const SUPPORT_PHONE = '+233202544614';
+const SUPPORT_EMAIL = 'contact@ghanatalksradio.com';
+
+function handleContactSupport() {
+  Alert.alert('Contact GhanaTalksRadio Support', `Phone: ${SUPPORT_PHONE}\nEmail: ${SUPPORT_EMAIL}`, [
+    { text: 'Call', onPress: () => Linking.openURL(`tel:${SUPPORT_PHONE}`).catch(() => {}) },
+    { text: 'Email', onPress: () => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => {}) },
+    { text: 'Close', style: 'cancel' },
+  ]);
+}
 
 export default function ProfileScreen({ navigation }: any) {
   const user = useUserStore((s) => s.user);
@@ -58,6 +69,11 @@ export default function ProfileScreen({ navigation }: any) {
           message="Create a free account to save articles, track your points, and manage your raffle entries."
           onSignIn={() => navigation.navigate('AuthModal', { screen: 'Login' })}
           onSignUp={() => navigation.navigate('AuthModal', { screen: 'SignUp' })}
+        />
+        <SecondaryButton
+          title="Contact Support"
+          onPress={handleContactSupport}
+          style={styles.guestContactButton}
         />
       </SafeAreaView>
     );
@@ -136,6 +152,11 @@ export default function ProfileScreen({ navigation }: any) {
               />
               <SecondaryButton title="Log Out" onPress={handleLogout} style={{ marginTop: SPACING.sm }} />
               <SecondaryButton
+                title="Contact Support"
+                onPress={handleContactSupport}
+                style={{ marginTop: SPACING.sm }}
+              />
+              <SecondaryButton
                 title="Delete My Account"
                 onPress={handleDeleteAccount}
                 loading={isDeletingAccount}
@@ -203,6 +224,7 @@ export default function ProfileScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: COLORS.surface },
+  guestContactButton: { marginHorizontal: SPACING.xl, marginBottom: SPACING.xl },
   listContent: { padding: SPACING.md },
   screenTitle: { fontSize: 28, fontWeight: '700', color: COLORS.onSurface },
   profileCard: {

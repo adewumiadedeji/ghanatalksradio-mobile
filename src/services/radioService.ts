@@ -7,7 +7,13 @@ import TrackPlayer, {
   State,
 } from 'react-native-track-player';
 import { LIVE_STREAM_URL } from './api';
-import { getSessionStatus, resolveStreamMount, startListeningSession, stopListeningSession } from './streamingApi';
+import {
+  getSessionStatus,
+  resolveStreamMount,
+  startListeningSession,
+  stopListeningSession,
+  updateListenerLocation,
+} from './streamingApi';
 import { useUserStore } from '../store/userStore';
 import { resolveListenerLocation } from '../utils/geolocation';
 import { getDeviceId } from '../utils/deviceId';
@@ -187,34 +193,42 @@ export async function playLiveStream() {
   // something a listener should ever wait on. Reads the current user
   // straight from the store (not a hook - this isn't a React component)
   // so a signed-in listener's session is attributed to their account
-  // instead of showing as a guest. Location resolution (permission + GPS
-  // + reverse-geocode) can take several seconds and is entirely optional -
-  // resolveListenerLocation() never throws, so a denied permission or GPS
-  // timeout just means the session is recorded without country/region,
-  // same as before this existed.
+  // instead of showing as a guest.
+  //
+  // Deliberately does NOT wait on resolveListenerLocation() before calling
+  // startListeningSession() - every count matters for the business, and
+  // gating the session on geolocation meant a listener who denies the
+  // permission prompt, or never answers it at all before backgrounding/
+  // closing the app (some OSes suspend JS timers while a native permission
+  // dialog is unanswered), never got counted at all. Location is now a
+  // best-effort follow-up attached to the session after it already exists -
+  // see updateListenerLocation()/PublicListenController::updateLocation()'s
+  // own docblocks.
   const userToken = useUserStore.getState().user?.token ?? null;
-  Promise.all([resolveListenerLocation(), getDeviceId()])
-    .then(([location, deviceId]) =>
-      startListeningSession(
-        {
-          ...(location
-            ? {
-                latitude: location.latitude,
-                longitude: location.longitude,
-                country: location.country ?? undefined,
-                region: location.region ?? undefined,
-                city: location.city ?? undefined,
-              }
-            : {}),
-          deviceId,
-          os: Platform.OS,
-        },
-        userToken
-      )
-    )
+  getDeviceId()
+    .then((deviceId) => startListeningSession({ deviceId, os: Platform.OS }, userToken))
     .then((sessionToken) => {
       currentSessionToken = sessionToken;
       startKickPoll();
+
+      resolveListenerLocation()
+        .then((location) => {
+          // Playback may have already stopped/restarted by the time
+          // geolocation resolves - never attach location to a session
+          // that's no longer the current one.
+          if (!location || currentSessionToken !== sessionToken) return;
+
+          return updateListenerLocation(sessionToken, {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            country: location.country ?? undefined,
+            region: location.region ?? undefined,
+            city: location.city ?? undefined,
+          });
+        })
+        .catch(() => {
+          // Best-effort - the session already exists either way.
+        });
     })
     .catch(() => {
       // No session recorded server-side; playback itself is unaffected.

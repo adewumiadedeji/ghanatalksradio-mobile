@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { StatusBar } from 'react-native';
+import { AppState, StatusBar, type AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import RootNavigator from './src/navigation/RootNavigator';
 import { NetworkStatusBanner } from './src/components/NetworkStatusBanner';
 import { UpdateRequiredScreen } from './src/components/UpdateRequiredScreen';
@@ -17,6 +17,21 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
   },
+});
+
+// React Query's refetch-on-focus only works out of the box on web, where the
+// browser fires its own focus events - on React Native nothing tells it the
+// app came back to the foreground unless this is wired up explicitly (per
+// TanStack Query's own React Native guide). Without it, a query only ever
+// refetches if its screen actually unmounts+remounts, which most screens in
+// this app never do (bottom-tab screens stay mounted) - so data fetched once
+// silently never refreshed again for as long as the app stayed backgrounded,
+// which iOS/Android do for a very long time rather than truly killing the
+// process. This was the real cause behind "I have to uninstall the app to
+// see portal changes" - uninstalling was just the one thing guaranteed to
+// force a genuinely fresh process.
+AppState.addEventListener('change', (status: AppStateStatus) => {
+  focusManager.setFocused(status === 'active');
 });
 
 export default function App() {

@@ -28,6 +28,7 @@ import YoutubeVideoScreen from '../screens/YoutubeVideoScreen';
 import PredictionsScreen from '../screens/engagements/PredictionsScreen';
 import LeaderboardScreen from '../screens/engagements/LeaderboardScreen';
 import QuizzesScreen from '../screens/engagements/QuizzesScreen';
+import PollsScreen from '../screens/engagements/PollsScreen';
 import EngagementScreen from '../screens/EngagementScreen';
 
 const AuthStack = createNativeStackNavigator();
@@ -148,6 +149,7 @@ export default function RootNavigator() {
         <RootStack.Screen name="Predictions" component={PredictionsScreen} />
         <RootStack.Screen name="Leaderboard" component={LeaderboardScreen} />
         <RootStack.Screen name="Quizzes" component={QuizzesScreen} />
+        <RootStack.Screen name="Polls" component={PollsScreen} />
       </RootStack.Navigator>
     </NavigationContainer>
   );

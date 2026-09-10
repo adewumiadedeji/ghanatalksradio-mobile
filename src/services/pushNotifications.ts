@@ -12,14 +12,18 @@ import { navigateWhenReady } from '../navigation/navigationRef';
  * device-token database involved at all), so sending on the admin side
  * is just one send to the relevant topic.
  *
- * Two separate topics on purpose: "studio-live" is always on (there's no
- * UI to turn it off), "promotions" is a distinct opt-out toggle (see
- * isPromotionsEnabled/setPromotionsEnabled, surfaced in ProfileScreen) -
- * a listener who mutes advertiser pushes should never lose live-show
- * alerts in the process.
+ * Three topics: "studio-live" and "engagement" are both always on (no
+ * UI to turn either off - engagement pushes are the station's own
+ * raffle/poll/quiz/prediction launches, not advertiser content, so they
+ * stay separate from the promotions opt-out below on purpose), and
+ * "promotions" is a distinct opt-out toggle (see isPromotionsEnabled/
+ * setPromotionsEnabled, surfaced in ProfileScreen) - a listener who mutes
+ * advertiser pushes should never lose live-show or engagement alerts in
+ * the process.
  */
 const STUDIO_LIVE_TOPIC = 'studio-live';
 const PROMOTIONS_TOPIC = 'promotions';
+const ENGAGEMENT_TOPIC = 'engagement';
 
 // Absent key = never toggled = subscribed by default, matching
 // studio-live's existing always-on behavior until the user actively
@@ -78,6 +82,23 @@ function goToNowPlaying() {
   navigateWhenReady('NowPlaying');
 }
 
+/** Polls have no dedicated screen yet (they're embedded elsewhere, not their own stack route) - falls back to NowPlaying rather than a broken navigate() call. */
+function goToEngagementScreen(engagementType: string | undefined) {
+  switch (engagementType) {
+    case 'raffle':
+      navigateWhenReady('Raffle');
+      return;
+    case 'quiz':
+      navigateWhenReady('Quizzes');
+      return;
+    case 'prediction':
+      navigateWhenReady('Predictions');
+      return;
+    default:
+      goToNowPlaying();
+  }
+}
+
 /**
  * Routes a tapped/opened notification based on `data.type`, which both
  * PushNotificationService methods set (`studio_live` / `promotion` - see
@@ -94,6 +115,11 @@ function handleNotificationTap(data: Record<string, string> | undefined) {
     if (url) {
       Linking.openURL(url).catch(() => {});
     }
+    return;
+  }
+
+  if (data?.type === 'engagement') {
+    goToEngagementScreen(data.engagement_type);
     return;
   }
 
@@ -129,6 +155,12 @@ export async function initPushNotifications() {
     }
 
     try {
+      await messaging().subscribeToTopic(ENGAGEMENT_TOPIC);
+    } catch (err) {
+      console.warn('initPushNotifications: engagement subscribeToTopic failed', err);
+    }
+
+    try {
       if (await isPromotionsEnabled()) {
         await messaging().subscribeToTopic(PROMOTIONS_TOPIC);
       }
@@ -153,6 +185,14 @@ export async function initPushNotifications() {
           body,
           url ? [{ text: 'Not now', style: 'cancel' }, { text: 'View', onPress: () => Linking.openURL(url).catch(() => {}) }] : [{ text: 'OK' }]
         );
+        return;
+      }
+
+      if (data?.type === 'engagement') {
+        Alert.alert(title, body, [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'View', onPress: () => goToEngagementScreen(data.engagement_type) },
+        ]);
         return;
       }
 

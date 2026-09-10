@@ -12,10 +12,13 @@ interface EngagementItem {
   route: string;
 }
 
+// Raffle is spliced in right after index 0 below (when active) - Polls goes
+// last rather than first so that insertion logic doesn't need to change.
 const ALWAYS_ON_ITEMS: EngagementItem[] = [
   { label: 'Predictions', description: 'Call the score, earn points', icon: 'football', route: 'Predictions' },
   { label: 'Quizzes', description: 'Test what you know', icon: 'help-circle', route: 'Quizzes' },
   { label: 'Leaderboard', description: 'See who is on top', icon: 'trophy', route: 'Leaderboard' },
+  { label: 'Polls', description: 'Vote and see what listeners think', icon: 'bar-chart', route: 'Polls' },
 ];
 
 const RAFFLE_ITEM: EngagementItem = {

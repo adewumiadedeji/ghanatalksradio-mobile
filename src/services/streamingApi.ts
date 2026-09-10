@@ -146,6 +146,28 @@ export async function stopListeningSession(sessionToken: string): Promise<void> 
   });
 }
 
+export interface ListenerLocation {
+  latitude?: number;
+  longitude?: number;
+  country?: string;
+  region?: string;
+  city?: string;
+}
+
+/** Best-effort follow-up, called only if/when geolocation actually resolves
+ * - startListeningSession() never waits on this, so a listener who denies
+ * or never answers the location prompt is still counted (see this app's
+ * PublicListenController::updateLocation() docblock for the bug this
+ * fixes: a session that never gets created at all if the permission
+ * dialog is left unanswered). Fire-and-forget is fine here too - a failed
+ * enrichment call just means this session has no location, same as today. */
+export async function updateListenerLocation(sessionToken: string, location: ListenerLocation): Promise<void> {
+  await callApi('/api/listen/location', {
+    method: 'POST',
+    body: JSON.stringify({ session_token: sessionToken, ...location }),
+  });
+}
+
 export interface NowPlayingProgramme {
   name: string;
   description: string | null;

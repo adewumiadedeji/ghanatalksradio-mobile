@@ -14,10 +14,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS, SPACING, RADIUS } from '../theme/colors';
-import { useUserStore } from '../store/userStore';
 import { useSearchArticles } from '../services/queries';
-import { usePollList, useVoteMutation } from '../services/pollsQueries';
-import { PollDto, PollOptionDto } from '../services/pollsApi';
 import { useYoutubeVideos } from '../services/youtubeQueries';
 import { YoutubeVideoDto } from '../services/youtubeApi';
 import { useRefetchOnFocus } from '../hooks/useRefetchOnFocus';
@@ -27,12 +24,8 @@ const FACEBOOK_URL = 'https://www.facebook.com/GhanaTalksRadio/';
 const INSTAGRAM_URL = 'https://www.instagram.com/ghanatalksradio/';
 
 export default function DiscoverScreen({ navigation }: any) {
-  const user = useUserStore((s) => s.user);
   const [searchQuery, setSearchQuery] = useState('');
   const { data: results, isLoading, isError } = useSearchArticles(searchQuery);
-
-  const { data: polls, isLoading: pollsLoading, refetch: refetchPolls } = usePollList(user?.token ?? null);
-  const voteMutation = useVoteMutation();
 
   const {
     data: videoPages,
@@ -44,9 +37,9 @@ export default function DiscoverScreen({ navigation }: any) {
   } = useYoutubeVideos();
 
   // Discover sits in a bottom-tab navigator, so it stays mounted in the
-  // background when the user switches tabs - without this, polls/videos
-  // only ever refresh on the very first mount, not on returning to the tab.
-  useRefetchOnFocus(refetchPolls, refetchVideos);
+  // background when the user switches tabs - without this, videos only
+  // ever refresh on the very first mount, not on returning to the tab.
+  useRefetchOnFocus(refetchVideos);
 
   const liveVideos = videoPages?.pages[0]?.live ?? [];
   const liveIds = new Set(liveVideos.map((v) => v.videoId));
@@ -62,24 +55,6 @@ export default function DiscoverScreen({ navigation }: any) {
 
   const openVideo = (video: YoutubeVideoDto) => {
     navigation.navigate('YoutubeVideo', { videoId: video.videoId, title: video.title });
-  };
-
-  const handleVote = (pollId: string, optionId: number) => {
-    if (!user) {
-      Alert.alert('Sign in to vote', 'Create a free account or sign in to vote on this poll.', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign In', onPress: () => navigation.navigate('AuthModal', { screen: 'Login' }) },
-      ]);
-      return;
-    }
-    voteMutation.mutate(
-      { token: user.token, pollId, optionId },
-      {
-        onError: (e) => {
-          Alert.alert('Could not record your vote', e instanceof Error ? e.message : 'Please try again.');
-        },
-      }
-    );
   };
 
   return (
@@ -113,57 +88,6 @@ export default function DiscoverScreen({ navigation }: any) {
             )
           ) : (
             <View style={{ gap: SPACING.lg }}>
-              {/* --- Polls --- */}
-              <View style={{ gap: SPACING.md }}>
-                <Text style={styles.sectionTitle}>Polls</Text>
-                {pollsLoading ? (
-                  <ActivityIndicator color={COLORS.secondary} />
-                ) : !polls || polls.length === 0 ? (
-                  <Text style={styles.emptyText}>No polls right now — check back soon.</Text>
-                ) : (
-                  polls.map((poll: PollDto) => {
-                    // Results are hidden (not "zero votes") when every
-                    // option's `votes` is null - see pollsApi.ts's
-                    // docblock. Only show the fill bar/percentages once
-                    // there's a real count to show, even if this device
-                    // has already voted.
-                    const resultsHidden = poll.options.every((o) => o.votes === null);
-                    const totalVotes = poll.options.reduce((sum: number, o: PollOptionDto) => sum + (o.votes ?? 0), 0);
-                    const voted = poll.your_option_id !== null;
-                    const showResults = voted && !resultsHidden;
-                    return (
-                      <View key={poll.id} style={styles.pollCard}>
-                        <Text style={styles.pollQuestion}>{poll.question}</Text>
-                        {poll.sponsor && (
-                          <Text style={styles.pollSponsor}>Sponsored by {poll.sponsor.name}</Text>
-                        )}
-                        {poll.options.map((option: PollOptionDto) => {
-                          const pct = totalVotes ? Math.round(((option.votes ?? 0) / totalVotes) * 100) : 0;
-                          return (
-                            <Pressable
-                              key={option.id}
-                              style={styles.pollOption}
-                              onPress={() => handleVote(poll.id, option.id)}
-                              disabled={voted}
-                            >
-                              {showResults && <View style={[styles.pollFill, { width: `${pct}%` }]} />}
-                              <Text style={styles.pollOptionText}>{option.text}</Text>
-                              {showResults && <Text style={styles.pollPct}>{pct}%</Text>}
-                            </Pressable>
-                          );
-                        })}
-                        {voted && resultsHidden && (
-                          <Text style={styles.pollReward}>Vote recorded - results are hidden until this poll closes.</Text>
-                        )}
-                        {!voted && poll.reward_points > 0 && (
-                          <Text style={styles.pollReward}>Vote to earn +{poll.reward_points} points</Text>
-                        )}
-                      </View>
-                    );
-                  })
-                )}
-              </View>
-
               <BannerAdSlot />
 
               {/* --- YouTube --- */}
@@ -304,35 +228,6 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15, color: COLORS.onSurface },
   listContent: { padding: SPACING.md, gap: SPACING.md },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: COLORS.onSurface },
-  pollCard: {
-    backgroundColor: COLORS.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    gap: 10,
-  },
-  pollQuestion: { fontSize: 16, fontWeight: '600', color: COLORS.onSurface },
-  pollSponsor: { fontSize: 12, color: COLORS.onSurfaceVariant, fontStyle: 'italic' },
-  pollOption: {
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    borderRadius: RADIUS.sm,
-    padding: 12,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  pollFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: COLORS.surfaceContainerHigh,
-  },
-  pollOptionText: { fontSize: 14, color: COLORS.onSurface, fontWeight: '500' },
-  pollPct: { fontSize: 13, color: COLORS.onSurfaceVariant, fontWeight: '600' },
-  pollReward: { fontSize: 12, color: COLORS.secondary, fontWeight: '600' },
   videoRow: { gap: SPACING.sm },
   videoCard: { width: 160 },
   videoThumb: { width: 160, height: 96, borderRadius: RADIUS.md, backgroundColor: COLORS.surfaceContainer },

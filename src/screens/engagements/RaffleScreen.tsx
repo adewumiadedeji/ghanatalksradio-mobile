@@ -168,6 +168,12 @@ export default function RaffleScreen({ navigation }: any) {
   // behalf. Paid raffles just reveal the normal ticket-stepper/Pay
   // controls once signed in, for the user to explicitly confirm.
   const [pendingFreeEntrySlug, setPendingFreeEntrySlug] = useState<string | null>(null);
+  // Set whenever a guest taps "Enter Raffle" on a PAID raffle, so the
+  // details sheet reopens automatically once they're signed in - mirrors
+  // pendingFreeEntrySlug above, but only reveals the ticket/Pay controls
+  // rather than auto-submitting (paid entries always need an explicit
+  // tap, see handleEnterPaid).
+  const [pendingReopenSlug, setPendingReopenSlug] = useState<string | null>(null);
   // Header-level, always rendered (unlike the per-card links, which only
   // exist while that specific raffle is listed) - the program-level
   // rules stay reachable even with zero raffles currently open.
@@ -226,13 +232,26 @@ export default function RaffleScreen({ navigation }: any) {
         redirectUrl: CHECKOUT_REDIRECT_URL,
         token: user.token,
       });
-      navigation.navigate('RafflePayment', {
-        checkoutUrl: checkout.checkout_url,
-        reference: checkout.reference,
-        raffleName: raffle.name,
-        ticketCount,
-      });
+      // Same freeze, same fix as handleGuestEnterPress: this screen's own
+      // native Modal (the details sheet, still visible=true here) has to
+      // be closed before RafflePayment - also a native modal
+      // (RootNavigator's `presentation: 'modal'`) - starts presenting.
+      // This was the actual cause of "closing the payment modal freezes
+      // the raffle screen" - RafflePayment was being presented on top of
+      // an already-open native Modal, and its dismissal (navigation.goBack()
+      // in RafflePaymentScreen) inherited the same two-native-modals
+      // conflict on the way back.
+      setDetailsRaffleSlug(null);
+      setTimeout(() => {
+        navigation.navigate('RafflePayment', {
+          checkoutUrl: checkout.checkout_url,
+          reference: checkout.reference,
+          raffleName: raffle.name,
+          ticketCount,
+        });
+      }, 300);
     } catch (e) {
+      console.log(e)
       Alert.alert('Could not enter', e instanceof Error ? e.message : 'Please try again.');
     } finally {
       setEnteringSlug(null);
@@ -253,9 +272,42 @@ export default function RaffleScreen({ navigation }: any) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // Reopens the details sheet for a paid raffle once sign-in completes -
+  // see pendingReopenSlug's own comment. `user` flips true the instant
+  // login() resolves, which is BEFORE LoginScreen's own
+  // `navigation.getParent()?.goBack()` has finished (or sometimes even
+  // started) dismissing AuthModal - opening this screen's own native
+  // Modal immediately re-created the exact "two native modals
+  // open/transitioning at once" freeze handleGuestEnterPress's delay was
+  // meant to prevent, just triggered from the return trip instead of the
+  // way in. Same fix, same reasoning: give AuthModal's dismiss animation
+  // time to actually finish first.
+  useEffect(() => {
+    if (!user || !pendingReopenSlug) return;
+    const slug = pendingReopenSlug;
+    setPendingReopenSlug(null);
+    setTimeout(() => setDetailsRaffleSlug(slug), 350);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const handleGuestEnterPress = (raffle: RaffleDto) => {
-    if (raffle.allow_free_entry) setPendingFreeEntrySlug(raffle.slug);
-    navigation.navigate('AuthModal', { screen: 'Login' });
+    if (raffle.allow_free_entry) {
+      setPendingFreeEntrySlug(raffle.slug);
+    } else {
+      setPendingReopenSlug(raffle.slug);
+    }
+    // Close this screen's own native Modal (the details sheet, still
+    // visible=true here) BEFORE presenting AuthModal, which is also a
+    // native modal (RootNavigator's `presentation: 'modal'`) - presenting
+    // one native modal while another is still open/mid-transition is a
+    // known RN/iOS bug that fully freezes the app with no error, only
+    // recoverable by a force-quit. This is the actual cause of the
+    // freeze-right-after-login bug: tapping "Enter Raffle" navigated to
+    // AuthModal while this Modal was still open. The delay gives the
+    // close animation time to finish before the next modal starts
+    // presenting.
+    setDetailsRaffleSlug(null);
+    setTimeout(() => navigation.navigate('AuthModal', { screen: 'Login' }), 300);
   };
 
   const anyPaidRaffle = (raffles ?? []).some((r) => r.entry_price !== null);
